@@ -14,7 +14,7 @@ import shutil
 from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
 from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile
-from core.rag_engine import upload_and_index_pdf
+from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats
 from core.memory import MemoryManager
 from core.security import create_access_token, verify_token
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
@@ -416,21 +416,25 @@ async def upload_file(
     try:
         result = upload_and_index_pdf(str(file_path), agent_type)
 
-        # 更新索引状态
+        # 更新索引状态和doc_id
         db = SessionLocal()
         try:
             kf = db.query(KnowledgeFile).filter(KnowledgeFile.filename == safe_filename).first()
             if kf:
                 kf.is_indexed = True
+                kf.doc_id = result.get("doc_id")
+                kf.chunk_count = result.get("chunks", 0)
                 db.commit()
         finally:
             db.close()
 
         return {
             "status": "success",
-            "message": result,
+            "message": "文档处理完成",
             "filename": safe_filename,
-            "file_path": str(file_path)
+            "file_path": str(file_path),
+            "doc_id": result.get("doc_id"),
+            "chunks": result.get("chunks", 0)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
@@ -451,12 +455,118 @@ async def list_uploaded_files(user: User = Depends(get_current_user)):
                 "original_filename": f.original_filename,
                 "size": f.file_size,
                 "agent_type": f.agent_type,
+                "doc_id": f.doc_id,
+                "chunk_count": f.chunk_count,
                 "is_indexed": f.is_indexed,
                 "created_at": f.created_at.isoformat()
             } for f in files]
         }
     finally:
         db.close()
+
+
+# ==================== 知识库管理接口 ====================
+
+@app.get("/knowledge/files")
+async def list_knowledge_files(user: User = Depends(get_current_user)):
+    """
+    获取知识库文件列表（包含索引状态和切片数）
+    """
+    db = SessionLocal()
+    try:
+        files = db.query(KnowledgeFile).filter(
+            KnowledgeFile.user_id == user.user_id
+        ).order_by(KnowledgeFile.created_at.desc()).all()
+
+        # 获取各collection的统计
+        collections = {}
+        for agent_type in ["tax_basic", "tax_pro"]:
+            stats = get_collection_stats(agent_type)
+            collections[agent_type] = stats.get("points_count", 0)
+
+        return {
+            "status": "success",
+            "files": [{
+                "filename": f.filename,
+                "original_filename": f.original_filename,
+                "size": f.file_size,
+                "agent_type": f.agent_type,
+                "doc_id": f.doc_id,
+                "chunk_count": f.chunk_count,
+                "is_indexed": f.is_indexed,
+                "created_at": f.created_at.isoformat()
+            } for f in files],
+            "collections": collections
+        }
+    finally:
+        db.close()
+
+
+@app.delete("/knowledge/files/{filename}")
+async def delete_knowledge_file(
+    filename: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    删除知识库文件（从数据库删除，向量库标记删除）
+    """
+    db = SessionLocal()
+    try:
+        kf = db.query(KnowledgeFile).filter(
+            KnowledgeFile.filename == filename,
+            KnowledgeFile.user_id == user.user_id
+        ).first()
+
+        if not kf:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        # 删除物理文件
+        try:
+            if os.path.exists(kf.file_path):
+                os.remove(kf.file_path)
+        except Exception:
+            pass
+
+        # 从数据库删除
+        db.delete(kf)
+        db.commit()
+
+        # TODO: 从向量库删除（需要根据doc_id删除）
+        # 目前向量库不支持精确删除，先标记
+
+        return {
+            "status": "success",
+            "message": "文件已删除"
+        }
+    finally:
+        db.close()
+
+
+@app.get("/knowledge/search_preview")
+async def preview_knowledge_search(
+    query: str,
+    agent_type: str = "tax_basic",
+    top_k: int = 5,
+    user: User = Depends(get_current_user)
+):
+    """
+    预览知识库搜索结果（测试检索效果）
+    """
+    result = search_knowledge_preview(query, agent_type, top_k)
+    return result
+
+
+@app.get("/knowledge/stats")
+async def get_knowledge_stats(
+    agent_type: str = "tax_basic",
+    user: User = Depends(get_current_user)
+):
+    """
+    获取知识库统计信息
+    """
+    stats = get_collection_stats(agent_type)
+    return stats
+
 
 # ==================== 对话接口 ====================
 

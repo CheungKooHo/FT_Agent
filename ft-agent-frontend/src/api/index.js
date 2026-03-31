@@ -112,6 +112,23 @@ const api = {
     return request.get('/uploaded_files')
   },
 
+  // 知识库管理
+  getKnowledgeFiles: () => {
+    return request.get('/knowledge/files')
+  },
+
+  deleteKnowledgeFile: (filename) => {
+    return request.delete(`/knowledge/files/${filename}`)
+  },
+
+  searchKnowledgePreview: (query, agentType, topK = 5) => {
+    return request.get('/knowledge/search_preview', { params: { query, agent_type: agentType, top_k: topK } })
+  },
+
+  getKnowledgeStats: (agentType) => {
+    return request.get('/knowledge/stats', { params: { agent_type: agentType } })
+  },
+
   // ===== Token 相关 =====
   getTokenBalance: (userId) => {
     return request.get('/token/balance', { params: { user_id: userId } })

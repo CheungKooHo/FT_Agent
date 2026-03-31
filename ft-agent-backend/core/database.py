@@ -263,6 +263,8 @@ class KnowledgeFile(Base):
     file_size = Column(Integer)
     file_type = Column(String, default="pdf")
     agent_type = Column(String, nullable=True)  # 上传时关联的 Agent 类型
+    doc_id = Column(String, nullable=True)  # 向量库文档ID
+    chunk_count = Column(Integer, default=0)  # 切片数量
     is_indexed = Column(Boolean, default=False)   # 是否已索引到 RAG
     created_at = Column(DateTime, default=datetime.utcnow)
 
