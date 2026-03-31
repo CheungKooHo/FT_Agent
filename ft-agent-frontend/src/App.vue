@@ -24,4 +24,11 @@ html, body {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
+
+@media (min-width: 768px) {
+  .el-dialog {
+    width: 90% !important;
+    max-width: 600px !important;
+  }
+}
 </style>

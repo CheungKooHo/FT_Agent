@@ -52,7 +52,8 @@
     <el-dialog
       v-model="dialogVisible"
       title="添加记忆"
-      width="500px"
+      width="90%"
+      max-width="340px"
     >
       <el-form
         ref="formRef"

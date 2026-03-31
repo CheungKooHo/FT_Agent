@@ -50,9 +50,10 @@
     <el-dialog
       v-model="uploadDialogVisible"
       title="上传文档到知识库"
-      width="500px"
+      width="90%"
+      max-width="340px"
     >
-      <el-form label-width="100px">
+      <el-form label-width="80px">
         <el-form-item label="选择文件" required>
           <el-upload
             ref="uploadRef"
@@ -60,12 +61,8 @@
             :limit="1"
             :on-change="handleFileChange"
             accept=".pdf"
-            drag
           >
-            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-            <div class="el-upload__text">
-              将文件拖到此处，或<em>点击上传</em>
-            </div>
+            <el-button type="primary">选择PDF文件</el-button>
             <template #tip>
               <div class="el-upload__tip">
                 只能上传 PDF 文件
