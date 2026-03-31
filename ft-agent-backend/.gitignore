@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+sql_app.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Vector database
+local_qdrant/
+qdrant_storage/
+
+# HuggingFace cache
+.cache/
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+
+# Backup files
+*.bak
+backup/
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Documentation build
+docs/_build/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Sensitive files
+*.key
+*.pem
+*.cert
+credentials.json
+secrets.json

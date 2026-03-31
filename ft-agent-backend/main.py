@@ -1,0 +1,1550 @@
+from dotenv import load_dotenv
+
+# 必须在最开始加载环境变量，确保 HF_ENDPOINT 等配置生效
+load_dotenv()
+
+import os
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime, timedelta
+import shutil
+from pathlib import Path
+from core.engine import run_agent, grant_free_token, get_token_balance
+from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile
+from core.rag_engine import upload_and_index_pdf
+from core.memory import MemoryManager
+from core.security import create_access_token, verify_token
+from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
+
+# 启动时创建数据库表
+init_db()
+
+app = FastAPI(title="FT-Agent 财税智能平台")
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# API 前缀中间件 - 移除 /api 前缀以便与前端代理配合
+class APIPrefixMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path.startswith("/api/"):
+            # 移除 /api 前缀
+            new_path = request.url.path[4:]  # 去掉 "/api"
+            request.scope["path"] = new_path
+        response = await call_next(request)
+        return response
+
+app.add_middleware(APIPrefixMiddleware)
+
+# 创建上传目录
+UPLOAD_DIR = Path("./uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# ==================== 认证相关函数 ====================
+
+def get_current_user(authorization: str = Header(None)):
+    """验证用户 JWT Token"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="未提供认证令牌")
+
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(status_code=401, detail="无效的认证方案")
+    except ValueError:
+        raise HTTPException(status_code=401, detail="无效的认证格式")
+
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="令牌已过期或无效")
+
+    db = SessionLocal()
+    try:
+        user_id = payload.get("sub")
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=403, detail="账号已被禁用")
+        return user
+    finally:
+        db.close()
+
+# ==================== 用户管理接口 ====================
+
+class UserRegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+    nickname: Optional[str] = None
+
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserUpdateRequest(BaseModel):
+    nickname: Optional[str] = None
+    email: Optional[str] = None
+
+@app.post("/register")
+async def register_user(request: UserRegisterRequest):
+    """
+    用户注册
+
+    请求示例:
+    {
+        "username": "zhangsan",
+        "password": "password123",
+        "email": "zhangsan@example.com",
+        "nickname": "张三"
+    }
+    """
+    db = SessionLocal()
+    try:
+        # 检查用户名是否已存在
+        existing_user = db.query(User).filter(User.username == request.username).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="用户名已存在")
+
+        # 检查邮箱是否已存在
+        if request.email:
+            existing_email = db.query(User).filter(User.email == request.email).first()
+            if existing_email:
+                raise HTTPException(status_code=400, detail="邮箱已被注册")
+
+        # 创建新用户
+        user = User(
+            user_id=User.generate_user_id(),
+            username=request.username,
+            email=request.email,
+            nickname=request.nickname or request.username
+        )
+        user.set_password(request.password)
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # 赠送新用户免费 Token
+        grant_free_token(user.user_id, FREE_TOKEN_GRANT)
+
+        # 生成 JWT token
+        access_token = create_access_token(data={"sub": user.user_id, "username": user.username})
+
+        return {
+            "status": "success",
+            "message": "注册成功",
+            "data": {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_id": user.user_id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "email": user.email,
+                "created_at": user.created_at.isoformat(),
+                "free_token_granted": FREE_TOKEN_GRANT
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.post("/login")
+async def login_user(request: UserLoginRequest):
+    """
+    用户登录
+
+    请求示例:
+    {
+        "username": "zhangsan",
+        "password": "password123"
+    }
+    """
+    db = SessionLocal()
+    try:
+        # 查找用户
+        user = db.query(User).filter(User.username == request.username).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        # 验证密码
+        if not user.check_password(request.password):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        # 检查是否激活
+        if not user.is_active:
+            raise HTTPException(status_code=403, detail="账号已被禁用")
+
+        # 更新最后登录时间
+        user.last_login = datetime.utcnow()
+        db.commit()
+
+        # 生成 JWT token
+        access_token = create_access_token(data={"sub": user.user_id, "username": user.username})
+
+        return {
+            "status": "success",
+            "message": "登录成功",
+            "data": {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user_id": user.user_id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "email": user.email,
+                "last_login": user.last_login.isoformat()
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== Admin 登录接口 ====================
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/admin/login")
+async def admin_login(request: AdminLoginRequest):
+    """
+    Admin 管理员登录
+    """
+    db = SessionLocal()
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.username == request.username).first()
+        if not admin:
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        if not admin.check_password(request.password):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+        if not admin.is_active:
+            raise HTTPException(status_code=403, detail="账号已被禁用")
+
+        admin.last_login = datetime.utcnow()
+        db.commit()
+
+        access_token = create_access_token(data={"sub": admin.username, "role": admin.role})
+
+        return {
+            "status": "success",
+            "message": "登录成功",
+            "data": {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "username": admin.username,
+                "role": admin.role
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/user/{user_id}")
+async def get_user_info(user_id: str):
+    """
+    获取用户信息
+
+    参数:
+    - user_id: 用户ID
+    """
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        return {
+            "status": "success",
+            "data": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "email": user.email,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat(),
+                "last_login": user.last_login.isoformat() if user.last_login else None
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/user/{user_id}")
+async def update_user_info(user_id: str, request: UserUpdateRequest):
+    """
+    更新用户信息
+
+    请求示例:
+    {
+        "nickname": "新昵称",
+        "email": "newemail@example.com"
+    }
+    """
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        # 更新信息
+        if request.nickname is not None:
+            user.nickname = request.nickname
+
+        if request.email is not None:
+            # 检查邮箱是否已被其他用户使用
+            existing_email = db.query(User).filter(
+                User.email == request.email,
+                User.user_id != user_id
+            ).first()
+            if existing_email:
+                raise HTTPException(status_code=400, detail="邮箱已被使用")
+            user.email = request.email
+
+        db.commit()
+        db.refresh(user)
+
+        return {
+            "status": "success",
+            "message": "更新成功",
+            "data": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "nickname": user.nickname,
+                "email": user.email
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== RAG 相关接口 ====================
+
+@app.post("/upload_policy")
+async def upload_policy(agent_type: str, file_path: str):
+    """
+    上传 PDF 文档到知识库（通过文件路径）
+
+    已弃用，推荐使用 /upload_file
+    """
+    # agent_type 决定了知识存入哪个 collection
+    # file_path 是你电脑上 PDF 的绝对路径
+    result = upload_and_index_pdf(file_path, agent_type)
+    return {"status": result}
+
+@app.post("/upload_file")
+async def upload_file(
+    agent_type: str,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user)
+):
+    """
+    上传 PDF 文件到知识库
+
+    参数:
+    - agent_type: Agent 类型
+    - file: PDF 文件
+
+    返回:
+    - status: 处理状态
+    - filename: 保存的文件名
+    """
+    # 检查文件类型
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="只支持 PDF 文件")
+
+    # 生成唯一文件名
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"{timestamp}_{file.filename}"
+    file_path = UPLOAD_DIR / safe_filename
+
+    # 保存文件
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
+    finally:
+        file.file.close()
+
+    file_size = file_path.stat().st_size
+
+    # 记录到数据库
+    db = SessionLocal()
+    try:
+        kf = KnowledgeFile(
+            user_id=user.user_id,
+            filename=safe_filename,
+            original_filename=file.filename,
+            file_path=str(file_path),
+            file_size=file_size,
+            file_type="pdf",
+            agent_type=agent_type,
+            is_indexed=False
+        )
+        db.add(kf)
+        db.commit()
+    finally:
+        db.close()
+
+    # 处理文件并索引到向量库
+    try:
+        result = upload_and_index_pdf(str(file_path), agent_type)
+
+        # 更新索引状态
+        db = SessionLocal()
+        try:
+            kf = db.query(KnowledgeFile).filter(KnowledgeFile.filename == safe_filename).first()
+            if kf:
+                kf.is_indexed = True
+                db.commit()
+        finally:
+            db.close()
+
+        return {
+            "status": "success",
+            "message": result,
+            "filename": safe_filename,
+            "file_path": str(file_path)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
+
+
+@app.get("/uploaded_files")
+async def list_uploaded_files(user: User = Depends(get_current_user)):
+    """
+    列出当前用户上传的文件
+    """
+    db = SessionLocal()
+    try:
+        files = db.query(KnowledgeFile).filter(KnowledgeFile.user_id == user.user_id).all()
+        return {
+            "status": "success",
+            "files": [{
+                "filename": f.filename,
+                "original_filename": f.original_filename,
+                "size": f.file_size,
+                "agent_type": f.agent_type,
+                "is_indexed": f.is_indexed,
+                "created_at": f.created_at.isoformat()
+            } for f in files]
+        }
+    finally:
+        db.close()
+
+# ==================== 对话接口 ====================
+
+class ChatRequest(BaseModel):
+    message: str
+    agent_type: Optional[str] = None             # 已废弃，由订阅等级自动决定
+    user_id: str                                # 必填：用户ID
+    session_id: Optional[str] = None            # 可选：会话ID
+    use_memory: bool = True                     # 是否使用记忆系统
+    conversation_history_limit: int = 10        # 对话历史条数限制
+
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest, user: User = Depends(get_current_user)):
+    """
+    智能对话接口（根据用户订阅等级自动选用对应 Agent）
+
+    请求示例:
+    {
+        "message": "什么是增值税？",
+        "user_id": "user_123",
+        "session_id": "session_001",  // 可选
+        "use_memory": true,
+        "conversation_history_limit": 10
+    }
+    """
+    try:
+        # 根据用户订阅等级自动选用 Agent
+        db = SessionLocal()
+        try:
+            subscription = db.query(Subscription).filter(
+                Subscription.user_id == request.user_id,
+                Subscription.status == "active"
+            ).first()
+
+            if subscription:
+                tier = db.query(UserTier).filter(UserTier.id == subscription.tier_id).first()
+                if tier and tier.agent_type:
+                    agent_type = tier.agent_type
+                else:
+                    agent_type = request.agent_type  # fallback
+            else:
+                # 未订阅用户默认使用 basic
+                agent_type = "tax_basic"
+        finally:
+            db.close()
+
+        response = run_agent(
+            user_input=request.message,
+            agent_type=agent_type,
+            user_id=request.user_id,
+            session_id=request.session_id,
+            use_memory=request.use_memory,
+            conversation_history_limit=request.conversation_history_limit
+        )
+        return {"status": "success", "data": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Agent 配置接口 ====================
+
+class SetupAgentRequest(BaseModel):
+    name: str
+    agent_type: str
+    prompt: str
+
+@app.post("/setup_agent")
+async def setup_agent(request: SetupAgentRequest):
+    """创建或配置 Agent"""
+    db = SessionLocal()
+    new_agent = AgentConfig(name=request.name, agent_type=request.agent_type, prompt=request.prompt)
+    db.add(new_agent)
+    db.commit()
+    db.close()
+    return {"message": f"Agent {request.name} created!"}
+
+# ==================== 记忆管理接口 ====================
+
+class MemorySaveRequest(BaseModel):
+    user_id: str
+    key: str
+    value: str
+    memory_type: str = "fact"  # fact/preference/habit
+    description: Optional[str] = None
+
+@app.post("/memory")
+async def save_user_memory(request: MemorySaveRequest, user: User = Depends(get_current_user)):
+    """
+    保存用户长期记忆
+
+    请求示例:
+    {
+        "user_id": "user_123",
+        "key": "occupation",
+        "value": "会计师",
+        "memory_type": "fact",
+        "description": "用户职业"
+    }
+    """
+    if request.user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    try:
+        memory_manager = MemoryManager(user_id=request.user_id)
+        memory_manager.save_memory(
+            key=request.key,
+            value=request.value,
+            memory_type=request.memory_type,
+            description=request.description
+        )
+        return {"status": "success", "message": "记忆已保存"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/memory/{user_id}")
+async def get_user_memories(
+    user_id: str,
+    memory_type: Optional[str] = None,
+    user: User = Depends(get_current_user)
+):
+    """
+    获取用户的所有记忆
+
+    参数:
+    - user_id: 用户ID
+    - memory_type: 可选，记忆类型（fact/preference/habit）
+    """
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    try:
+        memory_manager = MemoryManager(user_id=user_id)
+        memories = memory_manager.get_all_memories(memory_type=memory_type)
+        return {"status": "success", "data": memories}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/memory")
+async def delete_user_memory(
+    user_id: str,
+    key: str,
+    memory_type: str = "fact",
+    user: User = Depends(get_current_user)
+):
+    """删除特定的用户记忆"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    try:
+        memory_manager = MemoryManager(user_id=user_id)
+        memory_manager.delete_memory(key=key, memory_type=memory_type)
+        return {"status": "success", "message": "记忆已删除"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/conversation_history/{user_id}")
+async def get_conversation_history(
+    user_id: str,
+    session_id: Optional[str] = None,
+    agent_type: Optional[str] = None,
+    limit: int = 50,
+    user: User = Depends(get_current_user)
+):
+    """
+    获取对话历史
+
+    参数:
+    - user_id: 用户ID
+    - session_id: 可选，会话ID
+    - agent_type: 可选，agent类型
+    - limit: 返回的最大消息数
+    """
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    try:
+        memory_manager = MemoryManager(user_id=user_id, session_id=session_id)
+        history = memory_manager.get_conversation_history(
+            agent_type=agent_type,
+            limit=limit
+        )
+        return {"status": "success", "data": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/conversation_history")
+async def clear_conversation_history(
+    user_id: str,
+    session_id: Optional[str] = None,
+    agent_type: Optional[str] = None,
+    user: User = Depends(get_current_user)
+):
+    """清空对话历史"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    try:
+        memory_manager = MemoryManager(user_id=user_id, session_id=session_id)
+        memory_manager.clear_conversation_history(agent_type=agent_type)
+        return {"status": "success", "message": "对话历史已清空"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Token 相关接口 ====================
+
+@app.get("/token/balance")
+async def get_token_balance_endpoint(user_id: str, user: User = Depends(get_current_user)):
+    """获取用户 Token 余额"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    db = SessionLocal()
+    try:
+        account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+        if not account:
+            return {
+                "status": "success",
+                "data": {
+                    "balance": 0,
+                    "total_purchased": 0,
+                    "total_consumed": 0,
+                    "total_granted": 0
+                }
+            }
+        return {
+            "status": "success",
+            "data": {
+                "balance": account.balance,
+                "total_purchased": account.total_purchased,
+                "total_consumed": account.total_consumed,
+                "total_granted": account.total_granted
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.get("/token/transactions")
+async def get_token_transactions(user_id: str, limit: int = 50, user: User = Depends(get_current_user)):
+    """获取 Token 交易记录"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    db = SessionLocal()
+    try:
+        transactions = db.query(TokenTransaction).filter(
+            TokenTransaction.user_id == user_id
+        ).order_by(TokenTransaction.created_at.desc()).limit(limit).all()
+
+        return {
+            "status": "success",
+            "data": [{
+                "type": t.transaction_type,
+                "amount": t.amount,
+                "balance_after": t.balance_after,
+                "description": t.description,
+                "created_at": t.created_at.isoformat()
+            } for t in transactions]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/token/recharge")
+async def recharge_token(user_id: str, amount: int, user: User = Depends(get_current_user)):
+    """Token 充值（模拟）"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限操作")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="充值数量必须大于0")
+
+    db = SessionLocal()
+    try:
+        account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+        if not account:
+            account = TokenAccount(user_id=user_id, balance=0)
+            db.add(account)
+            db.flush()
+
+        account.balance += amount
+        account.total_purchased += amount
+
+        transaction = TokenTransaction(
+            user_id=user_id,
+            transaction_type="purchase",
+            amount=amount,
+            balance_after=account.balance,
+            description=f"充值 {amount} Token"
+        )
+        db.add(transaction)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "充值成功",
+            "data": {"balance": account.balance}
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/token/price")
+async def get_token_price():
+    """获取Token价格"""
+    return {
+        "status": "success",
+        "data": {
+            "price_per_million": TOKEN_PRICE_PER_MILLION,  # 每百万Token价格（分）
+            "price_yuan": TOKEN_PRICE_PER_MILLION / 100  # 每百万Token价格（元）
+        }
+    }
+
+
+# ==================== 订阅相关接口 ====================
+
+@app.get("/subscription")
+async def get_subscription(user_id: str, user: User = Depends(get_current_user)):
+    """获取当前订阅信息"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
+    db = SessionLocal()
+    try:
+        subscription = db.query(Subscription).filter(
+            Subscription.user_id == user_id,
+            Subscription.status == "active"
+        ).first()
+
+        if not subscription:
+            # 获取用户 Token 余额判断是否可使用基础版
+            account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+            return {
+                "status": "success",
+                "data": {
+                    "tier": "basic",
+                    "tier_name": "基础版",
+                    "status": "available",
+                    "has_token": account.balance > 0 if account else False,
+                    "token_balance": account.balance if account else 0
+                }
+            }
+
+        tier = db.query(UserTier).filter(UserTier.id == subscription.tier_id).first()
+
+        return {
+            "status": "success",
+            "data": {
+                "tier": tier.tier_code if tier else "basic",
+                "tier_name": tier.tier_name if tier else "基础版",
+                "status": subscription.status,
+                "start_date": subscription.start_date.isoformat(),
+                "end_date": subscription.end_date.isoformat(),
+                "auto_renew": subscription.auto_renew
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/subscription/upgrade")
+async def upgrade_subscription(user_id: str, tier_code: str, user: User = Depends(get_current_user)):
+    """升级订阅（模拟支付）"""
+    if user_id != user.user_id:
+        raise HTTPException(status_code=403, detail="无权限操作")
+    if tier_code not in TIER_CONFIGS:
+        raise HTTPException(status_code=400, detail="无效的订阅等级")
+
+    tier_config = TIER_CONFIGS[tier_code]
+
+    db = SessionLocal()
+    try:
+        tier = db.query(UserTier).filter(UserTier.tier_code == tier_code).first()
+        if not tier:
+            raise HTTPException(status_code=404, detail="订阅等级不存在")
+
+        # 检查现有订阅
+        existing = db.query(Subscription).filter(
+            Subscription.user_id == user_id,
+            Subscription.status == "active"
+        ).first()
+
+        if existing:
+            existing.tier_id = tier.id
+            existing.updated_at = datetime.utcnow()
+        else:
+            subscription = Subscription(
+                user_id=user_id,
+                tier_id=tier.id,
+                status="active",
+                start_date=datetime.utcnow(),
+                end_date=datetime.utcnow() + timedelta(days=30)
+            )
+            db.add(subscription)
+
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"已升级到{tier.tier_name}",
+            "data": {
+                "tier": tier_code,
+                "tier_name": tier.tier_name,
+                "end_date": (datetime.utcnow() + timedelta(days=30)).isoformat()
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/tiers")
+async def get_available_tiers():
+    """获取可用订阅等级列表"""
+    db = SessionLocal()
+    try:
+        tiers = db.query(UserTier).filter(UserTier.is_active == True).all()
+        return {
+            "status": "success",
+            "data": [{
+                "tier_code": t.tier_code,
+                "tier_name": t.tier_name,
+                "description": t.description,
+                "monthly_token_quota": t.monthly_token_quota,
+                "token_per_message": t.token_per_message,
+                "price_monthly": t.price_monthly,
+                "agent_type": t.agent_type
+            } for t in tiers]
+        }
+    finally:
+        db.close()
+
+
+# ==================== Admin 管理接口 ====================
+
+def get_current_admin_user(authorization: str = Header(None)):
+    """验证 Admin JWT Token"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="未提供认证令牌")
+
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(status_code=401, detail="无效的认证方案")
+    except ValueError:
+        raise HTTPException(status_code=401, detail="无效的认证格式")
+
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="令牌已过期或无效")
+
+    db = SessionLocal()
+    try:
+        admin = db.query(AdminUser).filter(AdminUser.username == payload.get("sub")).first()
+        if not admin or not admin.is_active:
+            raise HTTPException(status_code=403, detail="无权限访问")
+        return admin
+    finally:
+        db.close()
+
+
+
+@app.get("/admin/stats/overview")
+async def admin_get_overview(admin: AdminUser = Depends(get_current_admin_user)):
+    """获取管理后台概览统计"""
+    db = SessionLocal()
+    try:
+        total_users = db.query(User).count()
+        total_admins = db.query(AdminUser).count()
+        total_tokens = db.query(TokenAccount).all()
+        total_balance = sum(a.balance for a in total_tokens)
+        total_consumed = sum(a.total_consumed for a in total_tokens)
+        total_purchased = sum(a.total_purchased for a in total_tokens)
+        active_subs = db.query(Subscription).filter(Subscription.status == "active").count()
+
+        return {
+            "status": "success",
+            "data": {
+                "total_users": total_users,
+                "total_admins": total_admins,
+                "total_balance": total_balance,
+                "total_consumed": total_consumed,
+                "total_purchased": total_purchased,
+                "active_subscriptions": active_subs
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.get("/admin/users")
+async def admin_list_users(
+    page: int = 1,
+    page_size: int = 20,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """获取用户列表"""
+    db = SessionLocal()
+    try:
+        total = db.query(User).count()
+        users = db.query(User).offset((page - 1) * page_size).limit(page_size).all()
+
+        user_list = []
+        for u in users:
+            account = db.query(TokenAccount).filter(TokenAccount.user_id == u.user_id).first()
+            sub = db.query(Subscription).filter(
+                Subscription.user_id == u.user_id,
+                Subscription.status == "active"
+            ).first()
+            tier = None
+            if sub:
+                tier = db.query(UserTier).filter(UserTier.id == sub.tier_id).first()
+
+            user_list.append({
+                "user_id": u.user_id,
+                "username": u.username,
+                "nickname": u.nickname,
+                "email": u.email,
+                "is_active": u.is_active,
+                "created_at": u.created_at.isoformat(),
+                "last_login": u.last_login.isoformat() if u.last_login else None,
+                "token_balance": account.balance if account else 0,
+                "tier": tier.tier_code if tier else "basic",
+                "tier_name": tier.tier_name if tier else "基础版"
+            })
+
+        return {
+            "status": "success",
+            "data": {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "users": user_list
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.put("/admin/users/{user_id}/toggle-status")
+async def admin_toggle_user_status(
+    user_id: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """启用/禁用用户"""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        user.is_active = not user.is_active
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"用户已{'启用' if user.is_active else '禁用'}"
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/users/{user_id}/grant-token")
+async def admin_grant_token(
+    user_id: str,
+    amount: int,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """管理员赠送 Token"""
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="数量必须大于0")
+
+    db = SessionLocal()
+    try:
+        account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+        if not account:
+            account = TokenAccount(user_id=user_id, balance=0)
+            db.add(account)
+
+        account.balance += amount
+        account.total_granted += amount
+
+        transaction = TokenTransaction(
+            user_id=user_id,
+            transaction_type="grant",
+            amount=amount,
+            balance_after=account.balance,
+            description=f"管理员 {admin.username} 赠送"
+        )
+        db.add(transaction)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"已赠送 {amount} Token",
+            "data": {"balance": account.balance}
+        }
+    finally:
+        db.close()
+
+
+@app.get("/admin/stats/token-usage")
+async def admin_token_stats(admin: AdminUser = Depends(get_current_admin_user)):
+    """Token 使用统计"""
+    db = SessionLocal()
+    try:
+        top_consumers = db.query(TokenAccount, User).join(
+            User, TokenAccount.user_id == User.user_id
+        ).order_by(TokenAccount.total_consumed.desc()).limit(10).all()
+
+        return {
+            "status": "success",
+            "data": {
+                "top_consumers": [{
+                    "username": u.username,
+                    "user_id": acc.user_id,
+                    "total_consumed": acc.total_consumed,
+                    "total_purchased": acc.total_purchased,
+                    "balance": acc.balance
+                } for acc, u in top_consumers]
+            }
+        }
+    finally:
+        db.close()
+
+
+# ==================== Agent 配置管理接口 ====================
+
+@app.get("/admin/agents")
+async def admin_list_agents(admin: AdminUser = Depends(get_current_admin_user)):
+    """获取 Agent 配置列表"""
+    db = SessionLocal()
+    try:
+        agents = db.query(Agent).all()
+        return {
+            "status": "success",
+            "data": [{
+                "id": a.id,
+                "agent_type": a.agent_type,
+                "name": a.name,
+                "model": a.model,
+                "prompt": a.prompt,
+                "is_active": a.is_active
+            } for a in agents]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/agents")
+async def admin_create_agent(
+    agent_type: str,
+    name: str,
+    prompt: str,
+    model: str = "deepseek-chat",
+    is_active: bool = True,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """创建 Agent 配置"""
+    db = SessionLocal()
+    try:
+        existing = db.query(Agent).filter(Agent.agent_type == agent_type).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Agent 类型已存在")
+
+        agent = Agent(agent_type=agent_type, name=name, prompt=prompt, model=model, is_active=is_active)
+        db.add(agent)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Agent {name} 创建成功",
+            "data": {
+                "id": agent.id,
+                "agent_type": agent.agent_type,
+                "name": agent.name,
+                "model": agent.model,
+                "is_active": agent.is_active
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/admin/agents/{agent_id}")
+async def admin_update_agent(
+    agent_id: int,
+    name: Optional[str] = None,
+    prompt: Optional[str] = None,
+    model: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """更新 Agent 配置"""
+    db = SessionLocal()
+    try:
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent 不存在")
+
+        if name is not None:
+            agent.name = name
+        if prompt is not None:
+            agent.prompt = prompt
+        if model is not None:
+            agent.model = model
+        if is_active is not None:
+            agent.is_active = is_active
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Agent 更新成功",
+            "data": {
+                "id": agent.id,
+                "agent_type": agent.agent_type,
+                "name": agent.name,
+                "model": agent.model,
+                "is_active": agent.is_active
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/admin/agents/{agent_id}")
+async def admin_delete_agent(
+    agent_id: int,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """删除 Agent 配置"""
+    db = SessionLocal()
+    try:
+        agent = db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent 不存在")
+
+        db.delete(agent)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Agent 删除成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# ==================== 订阅版本管理接口 ====================
+
+@app.get("/admin/tiers")
+async def admin_list_tiers(admin: AdminUser = Depends(get_current_admin_user)):
+    """获取订阅版本列表"""
+    db = SessionLocal()
+    try:
+        tiers = db.query(UserTier).all()
+        return {
+            "status": "success",
+            "data": [{
+                "id": t.id,
+                "tier_code": t.tier_code,
+                "tier_name": t.tier_name,
+                "description": t.description,
+                "monthly_token_quota": t.monthly_token_quota,
+                "token_per_message": t.token_per_message,
+                "price_monthly": t.price_monthly,
+                "agent_type": t.agent_type,
+                "is_active": t.is_active
+            } for t in tiers]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/tiers")
+async def admin_create_tier(
+    tier_code: str,
+    tier_name: str,
+    description: str,
+    monthly_token_quota: int,
+    token_per_message: int,
+    price_monthly: int,
+    agent_type: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """创建订阅版本"""
+    db = SessionLocal()
+    try:
+        existing = db.query(UserTier).filter(UserTier.tier_code == tier_code).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="版本代码已存在")
+
+        tier = UserTier(
+            tier_code=tier_code,
+            tier_name=tier_name,
+            description=description,
+            monthly_token_quota=monthly_token_quota,
+            token_per_message=token_per_message,
+            price_monthly=price_monthly,
+            agent_type=agent_type,
+            is_active=True
+        )
+        db.add(tier)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"订阅版本 {tier_name} 创建成功",
+            "data": {
+                "id": tier.id,
+                "tier_code": tier.tier_code,
+                "tier_name": tier.tier_name,
+                "agent_type": tier.agent_type
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/admin/tiers/{tier_id}")
+async def admin_update_tier(
+    tier_id: int,
+    tier_name: Optional[str] = None,
+    description: Optional[str] = None,
+    monthly_token_quota: Optional[int] = None,
+    token_per_message: Optional[int] = None,
+    price_monthly: Optional[int] = None,
+    agent_type: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """更新订阅版本"""
+    db = SessionLocal()
+    try:
+        tier = db.query(UserTier).filter(UserTier.id == tier_id).first()
+        if not tier:
+            raise HTTPException(status_code=404, detail="订阅版本不存在")
+
+        if tier_name is not None:
+            tier.tier_name = tier_name
+        if description is not None:
+            tier.description = description
+        if monthly_token_quota is not None:
+            tier.monthly_token_quota = monthly_token_quota
+        if token_per_message is not None:
+            tier.token_per_message = token_per_message
+        if price_monthly is not None:
+            tier.price_monthly = price_monthly
+        if agent_type is not None:
+            tier.agent_type = agent_type
+        if is_active is not None:
+            tier.is_active = is_active
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "订阅版本更新成功",
+            "data": {
+                "id": tier.id,
+                "tier_code": tier.tier_code,
+                "tier_name": tier.tier_name,
+                "agent_type": tier.agent_type,
+                "is_active": tier.is_active
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.delete("/admin/tiers/{tier_id}")
+async def admin_delete_tier(
+    tier_id: int,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """删除订阅版本"""
+    db = SessionLocal()
+    try:
+        tier = db.query(UserTier).filter(UserTier.id == tier_id).first()
+        if not tier:
+            raise HTTPException(status_code=404, detail="订阅版本不存在")
+
+        db.delete(tier)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "订阅版本删除成功"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# ==================== 政策文档管理接口 ====================
+
+@app.get("/admin/policy-documents")
+async def admin_list_policies(
+    page: int = 1,
+    page_size: int = 20,
+    category: Optional[str] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """获取政策文档列表"""
+    db = SessionLocal()
+    try:
+        query = db.query(PolicyDocument)
+        if category:
+            query = query.filter(PolicyDocument.category == category)
+
+        total = query.count()
+        docs = query.order_by(PolicyDocument.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+        return {
+            "status": "success",
+            "data": {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "documents": [{
+                    "id": d.id,
+                    "title": d.title,
+                    "category": d.category,
+                    "document_type": d.document_type,
+                    "source_url": d.source_url,
+                    "is_active": d.is_active,
+                    "effective_date": d.effective_date.isoformat() if d.effective_date else None,
+                    "created_at": d.created_at.isoformat()
+                } for d in docs]
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/policy-documents")
+async def admin_create_policy(
+    title: str,
+    category: str,
+    document_type: str = "national",
+    content: Optional[str] = None,
+    source_url: Optional[str] = None,
+    effective_date: Optional[datetime] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """创建政策文档"""
+    db = SessionLocal()
+    try:
+        doc = PolicyDocument(
+            title=title,
+            category=category,
+            document_type=document_type,
+            content=content or "",
+            source_url=source_url,
+            effective_date=effective_date,
+            created_by=admin.username
+        )
+        db.add(doc)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "文档创建成功",
+            "data": {"id": doc.id}
+        }
+    finally:
+        db.close()
+
+
+@app.put("/admin/policy-documents/{doc_id}")
+async def admin_update_policy(
+    doc_id: int,
+    title: Optional[str] = None,
+    category: Optional[str] = None,
+    content: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """更新政策文档"""
+    db = SessionLocal()
+    try:
+        doc = db.query(PolicyDocument).filter(PolicyDocument.id == doc_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        if title is not None:
+            doc.title = title
+        if category is not None:
+            doc.category = category
+        if content is not None:
+            doc.content = content
+        if is_active is not None:
+            doc.is_active = is_active
+
+        doc.updated_at = datetime.utcnow()
+        db.commit()
+
+        return {"status": "success", "message": "文档更新成功"}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/policy-documents/{doc_id}")
+async def admin_delete_policy(
+    doc_id: int,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """删除政策文档（软删除）"""
+    db = SessionLocal()
+    try:
+        doc = db.query(PolicyDocument).filter(PolicyDocument.id == doc_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="文档不存在")
+
+        doc.is_active = False
+        doc.updated_at = datetime.utcnow()
+        db.commit()
+
+        return {"status": "success", "message": "文档已删除"}
+    finally:
+        db.close()
+
+
+# ==================== 系统配置接口 ====================
+
+@app.get("/admin/system-configs")
+async def admin_list_configs(admin: AdminUser = Depends(get_current_admin_user)):
+    """获取系统配置"""
+    db = SessionLocal()
+    try:
+        configs = db.query(SystemConfig).all()
+        return {
+            "status": "success",
+            "data": {c.key: c.value for c in configs}
+        }
+    finally:
+        db.close()
+
+
+@app.put("/admin/system-configs/{key}")
+async def admin_update_config(
+    key: str,
+    value: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """更新系统配置"""
+    db = SessionLocal()
+    try:
+        config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+        if config:
+            config.value = value
+            config.updated_by = admin.username
+            config.updated_at = datetime.utcnow()
+        else:
+            config = SystemConfig(key=key, value=value, updated_by=admin.username)
+            db.add(config)
+        db.commit()
+
+        return {"status": "success", "message": "配置已更新"}
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
