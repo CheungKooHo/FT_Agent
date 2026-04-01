@@ -186,13 +186,14 @@
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
-            :limit="1"
+            :limit="10"
             accept=".pdf"
+            multiple
             :on-change="handleFileChange"
           >
-            <el-button type="primary">选择 PDF 文件</el-button>
+            <el-button type="primary">选择 PDF 文件（最多10个）</el-button>
             <template #tip>
-              <div class="el-upload__tip">只能上传 PDF 文件</div>
+              <div class="el-upload__tip">只能上传 PDF 文件，支持批量上传</div>
             </template>
           </el-upload>
         </el-form-item>
@@ -303,7 +304,7 @@ const uploading = ref(false)
 const uploadRef = ref(null)
 const uploadForm = reactive({
   agentType: 'tax_basic',
-  file: null
+  files: []
 })
 
 const previewDialogVisible = ref(false)
@@ -365,31 +366,44 @@ const loadStats = async () => {
 
 const showUploadDialog = () => {
   uploadForm.agentType = 'tax_basic'
-  uploadForm.file = null
+  uploadForm.files = []
   if (uploadRef.value) {
     uploadRef.value.clearFiles()
   }
   uploadDialogVisible.value = true
 }
 
-const handleFileChange = (file) => {
-  uploadForm.file = file.raw
+const handleFileChange = (file, fileList) => {
+  uploadForm.files = fileList.map(f => f.raw)
 }
 
 const submitUpload = async () => {
-  if (!uploadForm.file) {
+  if (!uploadForm.files || uploadForm.files.length === 0) {
     ElMessage.warning('请选择 PDF 文件')
     return
   }
 
   uploading.value = true
-  try {
-    const formData = new FormData()
-    formData.append('file', uploadForm.file)
-    formData.append('agent_type', uploadForm.agentType)
+  let successCount = 0
+  let failCount = 0
 
-    await api.uploadKnowledgeFile(formData)
-    ElMessage.success('上传成功')
+  try {
+    for (const file of uploadForm.files) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('agent_type', uploadForm.agentType)
+      try {
+        await api.uploadKnowledgeFile(formData)
+        successCount++
+      } catch (e) {
+        failCount++
+      }
+    }
+    if (failCount === 0) {
+      ElMessage.success(`成功上传 ${successCount} 个文件`)
+    } else {
+      ElMessage.warning(`成功 ${successCount} 个，失败 ${failCount} 个`)
+    }
     uploadDialogVisible.value = false
     loadFiles()
     loadStats()
