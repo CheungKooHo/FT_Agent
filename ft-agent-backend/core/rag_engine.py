@@ -4,6 +4,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Qdrant
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 import os
 
@@ -46,15 +47,43 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
         doc.metadata["doc_id"] = doc_id
         doc.metadata["chunk_index"] = i
 
-    # 4. 存储到向量库
+    # 4. 存储到向量库 - 使用底层API避免兼容性问题
     embeddings = get_embeddings()
+    client = get_qdrant_client()
 
-    vectorstore = Qdrant.from_documents(
-        texts,
-        embeddings,
-        path="./local_qdrant",
+    # 确保 collection 存在
+    try:
+        client.get_collection(collection_name)
+    except Exception:
+        # 创建 collection（384维向量，对应 paraphrase-multilingual-MiniLM-L12-v2）
+        client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+        )
+
+    # 获取向量维度
+    vector_size = 384
+
+    # 为每个文本生成向量并存储
+    points = []
+    for i, doc in enumerate(texts):
+        vector = embeddings.embed_query(doc.page_content)
+        point = PointStruct(
+            id=str(uuid.uuid4()),
+            vector=vector,
+            payload={
+                "page_content": doc.page_content,
+                "metadata": doc.metadata
+            }
+        )
+        points.append(point)
+
+    # 批量上传
+    client.upsert(
         collection_name=collection_name,
+        points=points
     )
+
     return {"status": "success", "doc_id": doc_id, "chunks": len(texts)}
 
 def search_knowledge(query: str, collection_name: str):
@@ -75,52 +104,67 @@ def search_knowledge_preview(query: str, collection_name: str, top_k: int = 5):
     返回: chunks列表，每条包含内容和来源信息
     """
     embeddings = get_embeddings()
+    client = get_qdrant_client()
 
     try:
-        vectorstore = Qdrant.from_existing_index(
-            embeddings=embeddings,
-            path="./local_qdrant",
-            collection_name=collection_name
-        )
+        # 验证 collection 是否存在
+        client.get_collection(collection_name)
     except Exception:
         return {"status": "success", "chunks": [], "total": 0}
 
-    docs = vectorstore.similarity_search(query, k=top_k)
-    chunks = []
-    for i, doc in enumerate(docs):
-        chunks.append({
-            "content": doc.page_content,
-            "source": doc.metadata.get("source", "未知"),
-            "doc_id": doc.metadata.get("doc_id", ""),
-            "chunk_index": doc.metadata.get("chunk_index", i)
-        })
-    return {"status": "success", "chunks": chunks, "total": len(chunks)}
+    try:
+        # 将查询文本转为向量
+        query_vector = embeddings.embed_query(query)
+
+        # 执行搜索
+        search_results = client.query_points(
+            collection_name=collection_name,
+            query=query_vector,
+            limit=top_k
+        )
+
+        chunks = []
+        for result in search_results.points:
+            payload = result.payload
+            chunks.append({
+                "content": payload.get("page_content", ""),
+                "source": payload.get("metadata", {}).get("source", "未知"),
+                "doc_id": payload.get("metadata", {}).get("doc_id", ""),
+                "chunk_index": payload.get("metadata", {}).get("chunk_index", 0)
+            })
+        return {"status": "success", "chunks": chunks, "total": len(chunks)}
+    except Exception as e:
+        return {"status": "success", "chunks": [], "total": 0}
 
 def get_collection_stats(collection_name: str):
     """获取collection统计信息"""
     client = get_qdrant_client()
     try:
         info = client.get_collection(collection_name)
+        # 获取 collection 的 info
+        count_result = client.count(collection_name=collection_name)
         return {
             "status": "success",
-            "vectors_count": info.vectors_count,
-            "points_count": info.points_count
+            "vectors_count": count_result.count,
+            "points_count": count_result.count
         }
     except Exception:
         return {"status": "success", "vectors_count": 0, "points_count": 0}
 
 def get_file_chunks(collection_name: str, doc_id: str):
     """获取指定文档的所有 chunks"""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue
+
     client = get_qdrant_client()
     try:
         # 查询该 doc_id 的所有 points
         results = client.scroll(
             collection_name=collection_name,
-            scroll_filter={
-                "must": [
-                    {"key": "metadata.doc_id", "match": {"value": doc_id}}
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="metadata.doc_id", match=MatchValue(value=doc_id))
                 ]
-            },
+            ),
             limit=1000
         )
         chunks = []
