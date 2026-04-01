@@ -36,8 +36,8 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     loader = PyPDFLoader(file_path)
     documents = loader.load()
 
-    # 2. 切片
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    # 2. 切片 - 增大chunk_size避免政策条目被切分
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     texts = text_splitter.split_documents(documents)
 
     # 3. 为每个chunk添加doc_id元数据
@@ -87,32 +87,83 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     return {"status": "success", "doc_id": doc_id, "chunks": len(texts)}
 
 def search_knowledge(query: str, collection_name: str):
-    """搜索知识库并返回合并的文本结果（用于增强Prompt）"""
+    """搜索知识库并返回合并的文本结果（用于增强Prompt）
+    通用策略：向量检索 + 列表项智能合并
+    - 召回更多候选chunks
+    - 如果检索到列表项chunk（包含序号），则合并其前一个包含政策关键词的chunk
+    """
+    import re
+
     embeddings = get_embeddings()
     client = get_qdrant_client()
 
     try:
-        # 验证 collection 是否存在
         client.get_collection(collection_name)
     except Exception:
         return ""
 
     try:
-        # 将查询文本转为向量
         query_vector = embeddings.embed_query(query)
 
-        # 执行搜索
+        # 召回更多候选
         search_results = client.query_points(
             collection_name=collection_name,
             query=query_vector,
-            limit=3
+            limit=50
         )
 
-        # 合并结果
-        contents = []
+        # 构建候选集
+        candidate_map = {}
         for result in search_results.points:
-            contents.append(result.payload.get("page_content", ""))
-        return "\n".join(contents)
+            payload = result.payload
+            content = payload.get("page_content", "")
+            key = (payload.get("metadata", {}).get("doc_id", ""), payload.get("metadata", {}).get("chunk_index", 0))
+
+            candidate_map[key] = {
+                "content": content,
+                "doc_id": payload.get("metadata", {}).get("doc_id", ""),
+                "chunk_index": payload.get("metadata", {}).get("chunk_index", 0),
+                "score": result.score
+            }
+
+        candidate_chunks = list(candidate_map.values())
+        candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
+
+        # 通用策略：如果检索到的chunk是列表项（以序号开头），往前找header合并
+        final_contents = []
+        used_keys = set()
+
+        for c in candidate_chunks:
+            key = (c["doc_id"], c["chunk_index"])
+            if key in used_keys:
+                continue
+
+            parts = []
+            base_index = c["chunk_index"]
+
+            # 检查是否是列表项chunk（以"1." "（1）" "8." 等序号开头）
+            is_list_item = re.search(r'^（?\d+[．.）)]', c["content"].strip()[:10])
+
+            if is_list_item:
+                # 往前找header chunk（chunk_index更小的，包含政策关键词的）
+                for offset in range(-1, -5, -1):
+                    header_key = (c["doc_id"], base_index + offset)
+                    if header_key not in used_keys and header_key in candidate_map:
+                        header = candidate_map[header_key]
+                        # header应该包含更多关键词且在列表之前
+                        if header["chunk_index"] < base_index:
+                            parts.append(header["content"])
+                            used_keys.add(header_key)
+                            break
+
+            parts.append(c["content"])
+            used_keys.add(key)
+            final_contents.append("\n".join(parts))
+
+            if len(final_contents) >= 5:
+                break
+
+        return "\n".join(final_contents)
     except Exception as e:
         print(f"RAG search error: {e}")
         return ""
@@ -120,38 +171,85 @@ def search_knowledge(query: str, collection_name: str):
 def search_knowledge_preview(query: str, collection_name: str, top_k: int = 5):
     """
     搜索知识库并返回详细结果（用于预览）
-    返回: chunks列表，每条包含内容和来源信息
+    通用策略：向量检索 + 列表项智能合并
     """
+    import re
+
     embeddings = get_embeddings()
     client = get_qdrant_client()
 
     try:
-        # 验证 collection 是否存在
         client.get_collection(collection_name)
     except Exception:
         return {"status": "success", "chunks": [], "total": 0}
 
     try:
-        # 将查询文本转为向量
         query_vector = embeddings.embed_query(query)
 
-        # 执行搜索
+        # 召回更多候选
         search_results = client.query_points(
             collection_name=collection_name,
             query=query_vector,
-            limit=top_k
+            limit=50
         )
 
-        chunks = []
+        candidate_map = {}
         for result in search_results.points:
             payload = result.payload
-            chunks.append({
-                "content": payload.get("page_content", ""),
+            content = payload.get("page_content", "")
+            key = (payload.get("metadata", {}).get("doc_id", ""), payload.get("metadata", {}).get("chunk_index", 0))
+
+            candidate_map[key] = {
+                "content": content,
                 "source": payload.get("metadata", {}).get("source", "未知"),
                 "doc_id": payload.get("metadata", {}).get("doc_id", ""),
-                "chunk_index": payload.get("metadata", {}).get("chunk_index", 0)
+                "chunk_index": payload.get("metadata", {}).get("chunk_index", 0),
+                "score": result.score
+            }
+
+        candidate_chunks = list(candidate_map.values())
+        candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
+
+        # 通用策略：如果检索到的chunk是列表项（以序号开头），往前找header合并
+        final_chunks = []
+        used_keys = set()
+
+        for c in candidate_chunks:
+            key = (c["doc_id"], c["chunk_index"])
+            if key in used_keys:
+                continue
+
+            parts = []
+            base_index = c["chunk_index"]
+
+            # 检查是否是列表项chunk（以"1." "（1）" "8." 等序号开头）
+            is_list_item = re.search(r'^（?\d+[．.）)]', c["content"].strip()[:10])
+
+            if is_list_item:
+                # 往前找header chunk
+                for offset in range(-1, -5, -1):
+                    header_key = (c["doc_id"], base_index + offset)
+                    if header_key not in used_keys and header_key in candidate_map:
+                        header = candidate_map[header_key]
+                        if header["chunk_index"] < base_index:
+                            parts.append(header["content"])
+                            used_keys.add(header_key)
+                            break
+
+            parts.append(c["content"])
+            used_keys.add(key)
+
+            final_chunks.append({
+                "content": "\n".join(parts),
+                "source": c["source"],
+                "doc_id": c["doc_id"],
+                "chunk_index": c["chunk_index"]
             })
-        return {"status": "success", "chunks": chunks, "total": len(chunks)}
+
+            if len(final_chunks) >= top_k:
+                break
+
+        return {"status": "success", "chunks": final_chunks, "total": len(final_chunks)}
     except Exception as e:
         return {"status": "success", "chunks": [], "total": 0}
 

@@ -258,9 +258,14 @@ def run_agent(
     # --- 3. 检索知识库 (RAG) ---
     context = ""
     try:
-        context = search_knowledge(user_input, agent_type)
-        if not context:
-            context = "未找到相关政策背景知识。"
+        rag_results = search_knowledge(user_input, agent_type)
+        print(f"===== RAG检索结果 =====")
+        print(f"查询: {user_input}")
+        print(f"Agent类型: {agent_type}")
+        print(f"RAG结果长度: {len(rag_results)}")
+        print(f"RAG结果内容: {rag_results[:200] if rag_results else '空'}...")
+        print(f"========================")
+        context = rag_results if rag_results else "未找到相关政策背景知识。"
     except Exception as e:
         print(f"RAG 检索异常: {e}")
         context = "政策知识库暂不可用。"
@@ -276,7 +281,7 @@ def run_agent(
 
     enhanced_prompt = f"""你是一个专业助手。以下是相关信息，请结合这些信息来回答用户的问题。
 
-【参考资料】:
+【参考资料】（重要：政策类问题必须以参考资料为准，参考资料包含最新政策文件内容，如果参考资料中有相关政策，必须引用参考资料中的原文或核心内容进行回答）:
 {context}
 
 【你的专业人设】:
