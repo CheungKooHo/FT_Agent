@@ -2049,6 +2049,18 @@ async def admin_get_file_chunks(
         db.close()
 
 
+@app.get("/admin/knowledge/search")
+async def admin_knowledge_search(
+    query: str,
+    agent_type: str = "tax_basic",
+    top_k: int = 5,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """RAG 检索测试"""
+    result = search_knowledge_preview(query, agent_type, top_k)
+    return result
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

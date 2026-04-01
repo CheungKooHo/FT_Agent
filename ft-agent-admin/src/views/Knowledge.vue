@@ -47,6 +47,61 @@
         </div>
       </template>
 
+      <!-- RAG 测试搜索 -->
+      <div class="rag-test">
+        <div class="rag-test-header">
+          <span class="rag-test-title">RAG 检索测试</span>
+        </div>
+        <el-form inline>
+          <el-form-item label="Agent">
+            <el-select v-model="testAgentType" style="width: 140px;">
+              <el-option label="税务基础版" value="tax_basic" />
+              <el-option label="税务专业版" value="tax_pro" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="查询">
+            <el-input
+              v-model="testQuery"
+              placeholder="输入问题测试检索效果"
+              style="width: 400px;"
+              @keyup.enter="testSearch"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="testSearch" :loading="testLoading">
+              搜索
+            </el-button>
+          </el-form-item>
+        </el-form>
+
+        <!-- 搜索结果 -->
+        <div v-if="testResults.length > 0" class="test-results">
+          <div class="results-header">
+            <span>检索结果 ({{ testResults.length }} 条)</span>
+          </div>
+          <div class="result-item" v-for="(item, index) in testResults" :key="index">
+            <div class="result-header">
+              <span class="result-score">#{{ index + 1 }}</span>
+              <span class="result-source">{{ item.source }}</span>
+              <span class="result-doc">doc_id: {{ item.doc_id }}</span>
+            </div>
+            <div class="result-content">{{ item.content }}</div>
+          </div>
+        </div>
+        <div v-else-if="testSearched && testResults.length === 0" class="no-results">
+          未找到相关结果
+        </div>
+      </div>
+    </el-card>
+
+    <el-card style="margin-top: 20px;">
+      <template #header>
+        <div class="card-header">
+          <span>知识库文件</span>
+          <el-button @click="loadStats">刷新统计</el-button>
+        </div>
+      </template>
+
       <!-- 过滤条件 -->
       <el-form inline style="margin-bottom: 15px;">
         <el-form-item label="Agent 类型">
@@ -54,9 +109,6 @@
             <el-option label="税务基础版" value="tax_basic" />
             <el-option label="税务专业版" value="tax_pro" />
           </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button @click="loadStats">刷新统计</el-button>
         </el-form-item>
       </el-form>
 
@@ -174,6 +226,35 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
 import { Plus, Loading } from '@element-plus/icons-vue'
+
+// RAG 测试
+const testAgentType = ref('tax_basic')
+const testQuery = ref('')
+const testLoading = ref(false)
+const testResults = ref([])
+const testSearched = ref(false)
+
+const testSearch = async () => {
+  if (!testQuery.value.trim()) {
+    ElMessage.warning('请输入查询内容')
+    return
+  }
+  testLoading.value = true
+  testResults.value = []
+  testSearched.value = false
+  try {
+    const response = await api.searchKnowledge(testQuery.value, testAgentType.value, 5)
+    if (response.status === 'success') {
+      testResults.value = response.chunks || []
+    }
+    testSearched.value = true
+  } catch (error) {
+    ElMessage.error('搜索失败')
+    testSearched.value = true
+  } finally {
+    testLoading.value = false
+  }
+}
 
 const files = ref([])
 const loading = ref(false)
@@ -403,5 +484,89 @@ onMounted(() => {
 .chunk-count {
   color: #909399;
   font-size: 13px;
+}
+
+.rag-test {
+  margin-top: 20px;
+}
+
+.rag-test-header {
+  margin-bottom: 15px;
+}
+
+.rag-test-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+}
+
+.test-results {
+  margin-top: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.results-header {
+  font-weight: 600;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f5f7fa;
+}
+
+.result-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #f5f7fa;
+}
+
+.result-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.result-score {
+  background: #409eff;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.result-source {
+  color: #909399;
+  font-size: 12px;
+}
+
+.result-doc {
+  color: #c0c4cc;
+  font-size: 11px;
+}
+
+.result-content {
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f5f7fa;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.no-results {
+  text-align: center;
+  padding: 30px;
+  color: #909399;
+  font-size: 14px;
 }
 </style>

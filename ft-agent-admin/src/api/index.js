@@ -154,6 +154,10 @@ const api = {
 
   getFileChunks: (filename) => {
     return request.get(`/admin/knowledge/files/${filename}/chunks`)
+  },
+
+  searchKnowledge: (query, agentType, topK = 5) => {
+    return request.get('/admin/knowledge/search', { params: { query, agent_type: agentType, top_k: topK } })
   }
 }
 
