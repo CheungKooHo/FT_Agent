@@ -32,13 +32,60 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     上传并索引PDF到向量库
     doc_id: 文档唯一ID，用于后续删除
     """
+    import re
+    from langchain_core.documents import Document
+
     # 1. 加载 PDF
     loader = PyPDFLoader(file_path)
     documents = loader.load()
 
-    # 2. 切片 - 增大chunk_size避免政策条目被切分
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    texts = text_splitter.split_documents(documents)
+    # 2. 智能切分 - 按政策条目切分，保持完整性
+    all_chunks = []
+    ITEM_PATTERN = re.compile(r'^（[一二三四五六七八九十]+）|^（[0-9]+）|^[0-9]+\.\s*|^（[0-9]+）\s*')
+
+    for doc in documents:
+        text = doc.page_content
+
+        # 先按换行符分段落
+        paragraphs = text.split('\n')
+
+        current_chunk = ""
+        for para in paragraphs:
+            if not para.strip():
+                continue
+
+            # 检查是否是新的政策条目开始
+            is_new_item = bool(ITEM_PATTERN.match(para.strip()))
+
+            if is_new_item and current_chunk:
+                # 保存当前chunk
+                if current_chunk.strip():
+                    all_chunks.append(current_chunk.strip())
+                current_chunk = para
+            else:
+                # 累加到当前chunk
+                if current_chunk:
+                    current_chunk += "\n" + para
+                else:
+                    current_chunk = para
+
+        # 保存最后一个chunk
+        if current_chunk.strip():
+            all_chunks.append(current_chunk.strip())
+
+    # 3. 合并太短的chunks（<100字的）与前一个合并
+    merged_chunks = []
+    for chunk in all_chunks:
+        if not merged_chunks:
+            merged_chunks.append(chunk)
+        elif len(chunk) < 100:
+            # 合并到前一个
+            merged_chunks[-1] += "\n" + chunk
+        else:
+            merged_chunks.append(chunk)
+
+    # 转为Document对象
+    texts = [Document(page_content=chunk, metadata=doc.metadata) for chunk in merged_chunks]
 
     # 3. 为每个chunk添加doc_id元数据
     if doc_id is None:
