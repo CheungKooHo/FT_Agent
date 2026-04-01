@@ -1312,20 +1312,65 @@ async def admin_token_stats(admin: AdminUser = Depends(get_current_admin_user)):
     """Token 使用统计"""
     db = SessionLocal()
     try:
+        # 总体统计
+        all_accounts = db.query(TokenAccount).all()
+        total_balance = sum(a.balance for a in all_accounts)
+        total_consumed = sum(a.total_consumed for a in all_accounts)
+        total_purchased = sum(a.total_purchased for a in all_accounts)
+        zero_balance = sum(1 for a in all_accounts if a.balance == 0)
+
+        # Token 分布（按 tier）
+        tier_stats = {}
+        for tier in db.query(UserTier).all():
+            user_ids = [sub.user_id for sub in db.query(Subscription).filter(
+                Subscription.tier_id == tier.id,
+                Subscription.status == "active"
+            ).all()]
+            accounts = [a for a in all_accounts if a.user_id in user_ids]
+            if accounts:
+                tier_stats[tier.tier_name] = {
+                    "count": len(accounts),
+                    "balance": sum(a.balance for a in accounts),
+                    "consumed": sum(a.total_consumed for a in accounts)
+                }
+
+        # Top 消费者
         top_consumers = db.query(TokenAccount, User).join(
             User, TokenAccount.user_id == User.user_id
-        ).order_by(TokenAccount.total_consumed.desc()).limit(10).all()
+        ).order_by(TokenAccount.total_consumed.desc()).limit(20).all()
+
+        # 最近 Token 交易
+        recent_transactions = db.query(TokenTransaction, User).join(
+            User, TokenTransaction.user_id == User.user_id
+        ).order_by(TokenTransaction.created_at.desc()).limit(10).all()
 
         return {
             "status": "success",
             "data": {
+                "summary": {
+                    "total_balance": total_balance,
+                    "total_consumed": total_consumed,
+                    "total_purchased": total_purchased,
+                    "total_accounts": len(all_accounts),
+                    "zero_balance_accounts": zero_balance
+                },
+                "tier_stats": tier_stats,
                 "top_consumers": [{
                     "username": u.username,
                     "user_id": acc.user_id,
                     "total_consumed": acc.total_consumed,
                     "total_purchased": acc.total_purchased,
                     "balance": acc.balance
-                } for acc, u in top_consumers]
+                } for acc, u in top_consumers],
+                "recent_transactions": [{
+                    "username": u.username,
+                    "user_id": trans.user_id,
+                    "type": trans.transaction_type,
+                    "amount": trans.amount,
+                    "balance_after": trans.balance_after,
+                    "description": trans.description,
+                    "created_at": trans.created_at.isoformat()
+                } for trans, u in recent_transactions]
             }
         }
     finally:
