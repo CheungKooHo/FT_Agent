@@ -49,7 +49,7 @@
           <el-input v-model="form.name" placeholder="如: 财税专家-标准版" />
         </el-form-item>
         <el-form-item label="模型" required>
-          <el-select v-model="form.model" placeholder="选择模型">
+          <el-select v-model="form.model" placeholder="选择模型" style="width: 100%;">
             <el-option label="DeepSeek Chat" value="deepseek-chat" />
             <el-option label="DeepSeek Coder" value="deepseek-coder" />
             <el-option label="GPT-4" value="gpt-4" />

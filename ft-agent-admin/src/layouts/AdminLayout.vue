@@ -34,6 +34,10 @@
           <el-icon><PriceTag /></el-icon>
           <span>订阅版本</span>
         </el-menu-item>
+        <el-menu-item index="/knowledge">
+          <el-icon><Collection /></el-icon>
+          <span>知识库</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -57,7 +61,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag } from '@element-plus/icons-vue'
+import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

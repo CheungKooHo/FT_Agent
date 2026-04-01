@@ -51,8 +51,9 @@ const api = {
   },
 
   // 用户管理
-  getUsers: (page = 1, pageSize = 20) => {
-    return request.get('/admin/users', { params: { page, page_size: pageSize } })
+  getUsers: (page = 1, pageSize = 20, filters = {}) => {
+    const params = { page, page_size: pageSize, ...filters }
+    return request.get('/admin/users', { params })
   },
 
   toggleUserStatus: (userId) => {
@@ -128,6 +129,27 @@ const api = {
 
   deleteTier: (tierId) => {
     return request.delete(`/admin/tiers/${tierId}`)
+  },
+
+  // 知识库管理
+  getKnowledgeFiles: (page = 1, pageSize = 20, agentType = null) => {
+    const params = { page, page_size: pageSize }
+    if (agentType) params.agent_type = agentType
+    return request.get('/admin/knowledge/files', { params })
+  },
+
+  uploadKnowledgeFile: (formData) => {
+    return request.post('/admin/knowledge/files', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  deleteKnowledgeFile: (filename) => {
+    return request.delete(`/admin/knowledge/files/${filename}`)
+  },
+
+  getKnowledgeStats: () => {
+    return request.get('/admin/knowledge/stats')
   }
 }
 

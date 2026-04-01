@@ -31,6 +31,10 @@
           <span class="info-value">{{ userStore.userInfo?.username }}</span>
         </div>
         <div class="info-row">
+          <span class="info-label">手机号</span>
+          <span class="info-value">{{ userStore.userInfo?.phone || '未设置' }}</span>
+        </div>
+        <div class="info-row">
           <span class="info-label">注册时间</span>
           <span class="info-value">{{ formatDate(userStore.userInfo?.created_at) }}</span>
         </div>
@@ -114,7 +118,11 @@
         </el-form-item>
 
         <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="请输入邮箱" />
+          <el-input v-model="form.email" placeholder="请输入邮箱（可选）" />
+        </el-form-item>
+
+        <el-form-item label="手机号" prop="phone">
+          <el-input v-model="form.phone" placeholder="请输入手机号（可选）" />
         </el-form-item>
       </el-form>
 
@@ -147,7 +155,8 @@ const stats = reactive({
 
 const form = reactive({
   nickname: '',
-  email: ''
+  email: '',
+  phone: ''
 })
 
 const rules = {
@@ -155,6 +164,10 @@ const rules = {
   email: [
     { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' },
     { required: false, message: '请输入邮箱', trigger: 'blur' }
+  ],
+  phone: [
+    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' },
+    { required: false }
   ]
 }
 
@@ -212,7 +225,8 @@ const handleSubmit = async () => {
       try {
         const response = await api.updateUserInfo(userStore.userInfo.user_id, {
           nickname: form.nickname,
-          email: form.email || null
+          email: form.email || null,
+          phone: form.phone || null
         })
         if (response.status === 'success') {
           userStore.userInfo = { ...userStore.userInfo, ...response.data }
@@ -230,6 +244,7 @@ const handleSubmit = async () => {
 onMounted(() => {
   form.nickname = userStore.userInfo?.nickname || ''
   form.email = userStore.userInfo?.email || ''
+  form.phone = userStore.userInfo?.phone || ''
   loadStats()
 })
 </script>

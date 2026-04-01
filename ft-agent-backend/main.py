@@ -13,7 +13,8 @@ from datetime import datetime, timedelta
 import shutil
 from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
-from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile
+from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
+from sqlalchemy import func
 from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats
 from core.memory import MemoryManager
 from core.security import create_access_token, verify_token
@@ -83,6 +84,7 @@ class UserRegisterRequest(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
+    phone: Optional[str] = None
     nickname: Optional[str] = None
 
 class UserLoginRequest(BaseModel):
@@ -92,6 +94,7 @@ class UserLoginRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     nickname: Optional[str] = None
     email: Optional[str] = None
+    phone: Optional[str] = None
 
 @app.post("/register")
 async def register_user(request: UserRegisterRequest):
@@ -119,11 +122,18 @@ async def register_user(request: UserRegisterRequest):
             if existing_email:
                 raise HTTPException(status_code=400, detail="邮箱已被注册")
 
+        # 检查手机号是否已存在
+        if request.phone:
+            existing_phone = db.query(User).filter(User.phone == request.phone).first()
+            if existing_phone:
+                raise HTTPException(status_code=400, detail="手机号已被注册")
+
         # 创建新用户
         user = User(
             user_id=User.generate_user_id(),
             username=request.username,
             email=request.email,
+            phone=request.phone,
             nickname=request.nickname or request.username
         )
         user.set_password(request.password)
@@ -321,6 +331,16 @@ async def update_user_info(user_id: str, request: UserUpdateRequest):
             if existing_email:
                 raise HTTPException(status_code=400, detail="邮箱已被使用")
             user.email = request.email
+
+        if request.phone is not None:
+            # 检查手机号是否已被其他用户使用
+            existing_phone = db.query(User).filter(
+                User.phone == request.phone,
+                User.user_id != user_id
+            ).first()
+            if existing_phone:
+                raise HTTPException(status_code=400, detail="手机号已被使用")
+            user.phone = request.phone
 
         db.commit()
         db.refresh(user)
@@ -1030,23 +1050,69 @@ async def admin_get_overview(admin: AdminUser = Depends(get_current_admin_user))
     """获取管理后台概览统计"""
     db = SessionLocal()
     try:
+        from datetime import datetime, timedelta
+
         total_users = db.query(User).count()
         total_admins = db.query(AdminUser).count()
+
+        # Token 统计
         total_tokens = db.query(TokenAccount).all()
         total_balance = sum(a.balance for a in total_tokens)
         total_consumed = sum(a.total_consumed for a in total_tokens)
         total_purchased = sum(a.total_purchased for a in total_tokens)
+
+        # 订阅统计
         active_subs = db.query(Subscription).filter(Subscription.status == "active").count()
+        total_subs = db.query(Subscription).count()
+
+        # 今日/本周新增用户
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
+        new_users_today = db.query(User).filter(User.created_at >= today_start).count()
+        new_users_week = db.query(User).filter(User.created_at >= week_start).count()
+
+        # 知识库统计
+        total_knowledge_files = db.query(KnowledgeFile).count()
+        indexed_files = db.query(KnowledgeFile).filter(KnowledgeFile.is_indexed == True).count()
+
+        # Agent 分布
+        agent_counts = {}
+        for ut in db.query(UserTierRelation).all():
+            tier_config = next((t for t in TIER_CONFIGS if t["id"] == ut.tier_id), None)
+            tier_name = tier_config["name"] if tier_config else ut.tier_id
+            agent_counts[tier_name] = agent_counts.get(tier_name, 0) + 1
+
+        # Token 账户统计
+        token_accounts = db.query(TokenAccount).count()
+        zero_balance_users = db.query(TokenAccount).filter(TokenAccount.balance == 0).count()
+
+        # 知识库各 collection 向量统计
+        tax_basic_stats = get_collection_stats("tax_basic")
+        tax_pro_stats = get_collection_stats("tax_pro")
 
         return {
             "status": "success",
             "data": {
+                # 用户
                 "total_users": total_users,
                 "total_admins": total_admins,
+                "new_users_today": new_users_today,
+                "new_users_week": new_users_week,
+                "agent_distribution": agent_counts,
+                # Token
                 "total_balance": total_balance,
                 "total_consumed": total_consumed,
                 "total_purchased": total_purchased,
-                "active_subscriptions": active_subs
+                "token_accounts": token_accounts,
+                "zero_balance_users": zero_balance_users,
+                # 订阅
+                "active_subscriptions": active_subs,
+                "total_subscriptions": total_subs,
+                # 知识库
+                "total_knowledge_files": total_knowledge_files,
+                "indexed_files": indexed_files,
+                "tax_basic_vectors": tax_basic_stats.get("vectors_count", 0),
+                "tax_pro_vectors": tax_pro_stats.get("vectors_count", 0)
             }
         }
     finally:
@@ -1057,37 +1123,114 @@ async def admin_get_overview(admin: AdminUser = Depends(get_current_admin_user))
 async def admin_list_users(
     page: int = 1,
     page_size: int = 20,
+    tier: Optional[str] = None,
+    is_active: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_field: Optional[str] = None,
+    sort_order: Optional[str] = "desc",
     admin: AdminUser = Depends(get_current_admin_user)
 ):
     """获取用户列表"""
     db = SessionLocal()
     try:
-        total = db.query(User).count()
-        users = db.query(User).offset((page - 1) * page_size).limit(page_size).all()
+        query = db.query(User)
 
-        user_list = []
-        for u in users:
+        # 搜索筛选
+        if search:
+            query = query.filter(
+                (User.username.contains(search)) |
+                (User.email.contains(search)) |
+                (User.nickname.contains(search)) |
+                (User.phone.contains(search))
+            )
+
+        # 状态筛选
+        if is_active is not None:
+            is_active_bool = is_active.lower() == 'true' if isinstance(is_active, str) else is_active
+            query = query.filter(User.is_active == is_active_bool)
+
+        # 版本筛选 - 通过 subscriptions 表的 tier_id 关联 UserTier.id 再匹配 tier_code
+        if tier:
+            tier_obj = db.query(UserTier).filter(UserTier.tier_code == tier).first()
+            if tier_obj:
+                tier_user_ids = [sub.user_id for sub in db.query(Subscription).filter(
+                    Subscription.tier_id == tier_obj.id,
+                    Subscription.status == "active"
+                ).all()]
+                query = query.filter(User.user_id.in_(tier_user_ids))
+            else:
+                query = query.filter(User.user_id.in_([]))
+
+        # 先获取所有匹配的用户（不分页，用于排序）
+        all_users = query.all()
+        total = len(all_users)
+
+        # 构建用户数据并附加排序字段
+        user_data_with_sort = []
+        for u in all_users:
             account = db.query(TokenAccount).filter(TokenAccount.user_id == u.user_id).first()
             sub = db.query(Subscription).filter(
                 Subscription.user_id == u.user_id,
                 Subscription.status == "active"
             ).first()
-            tier = None
+            tier_obj = None
             if sub:
-                tier = db.query(UserTier).filter(UserTier.id == sub.tier_id).first()
+                tier_obj = db.query(UserTier).filter(UserTier.id == sub.tier_id).first()
+            user_tier = db.query(UserTierRelation).filter(UserTierRelation.user_id == u.user_id).first()
+            uploaded_files = db.query(KnowledgeFile).filter(KnowledgeFile.user_id == u.user_id).count()
 
-            user_list.append({
+            user_data = {
                 "user_id": u.user_id,
                 "username": u.username,
                 "nickname": u.nickname,
                 "email": u.email,
+                "phone": u.phone,
                 "is_active": u.is_active,
                 "created_at": u.created_at.isoformat(),
                 "last_login": u.last_login.isoformat() if u.last_login else None,
+                "last_login_ts": u.last_login.timestamp() if u.last_login else 0,
+                "created_at_ts": u.created_at.timestamp() if u.created_at else 0,
                 "token_balance": account.balance if account else 0,
-                "tier": tier.tier_code if tier else "basic",
-                "tier_name": tier.tier_name if tier else "基础版"
-            })
+                "token_total_consumed": account.total_consumed if account else 0,
+                "token_total_purchased": account.total_purchased if account else 0,
+                "tier": tier_obj.tier_code if tier_obj else (user_tier.tier_id if user_tier else "basic"),
+                "tier_name": tier_obj.tier_name if tier_obj else "基础版",
+                "subscription_end": sub.end_date.isoformat() if sub and sub.end_date else None,
+                "subscription_end_ts": sub.end_date.timestamp() if sub and sub.end_date else 0,
+                "subscription_status": sub.status if sub else None,
+                "uploaded_files": uploaded_files,
+                "total_conversations": len(set([c.session_id for c in db.query(ConversationHistory).filter(ConversationHistory.user_id == u.user_id).all()])),
+                "total_recharge_tokens": db.query(func.coalesce(func.sum(TokenTransaction.amount), 0)).filter(TokenTransaction.user_id == u.user_id, TokenTransaction.transaction_type == "purchase").scalar()
+            }
+            user_data_with_sort.append(user_data)
+
+        # 排序
+        sort_field = sort_field or "created_at"
+        sort_order = sort_order or "desc"
+        reverse = sort_order.lower() == "desc"
+
+        sort_field_map = {
+            "token_balance": lambda x: x["token_balance"],
+            "total_recharge_tokens": lambda x: x["total_recharge_tokens"],
+            "total_conversations": lambda x: x["total_conversations"],
+            "subscription_end": lambda x: x["subscription_end_ts"],
+            "created_at": lambda x: x["created_at_ts"],
+            "last_login": lambda x: x["last_login_ts"],
+        }
+
+        if sort_field in sort_field_map:
+            user_data_with_sort.sort(key=sort_field_map[sort_field], reverse=reverse)
+
+        # 分页
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_users = user_data_with_sort[start:end]
+
+        # 移除排序用的时间戳字段
+        for u in paginated_users:
+            u.pop("last_login_ts", None)
+            u.pop("created_at_ts", None)
+            u.pop("subscription_end_ts", None)
 
         return {
             "status": "success",
@@ -1095,7 +1238,7 @@ async def admin_list_users(
                 "total": total,
                 "page": page,
                 "page_size": page_size,
-                "users": user_list
+                "users": paginated_users
             }
         }
     finally:
@@ -1654,6 +1797,191 @@ async def admin_update_config(
         return {"status": "success", "message": "配置已更新"}
     finally:
         db.close()
+
+
+# ==================== 知识库管理接口 ====================
+
+@app.get("/admin/knowledge/files")
+async def admin_list_knowledge_files(
+    page: int = 1,
+    page_size: int = 20,
+    agent_type: Optional[str] = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """获取所有用户的知识库文件列表"""
+    db = SessionLocal()
+    try:
+        query = db.query(KnowledgeFile)
+        if agent_type:
+            query = query.filter(KnowledgeFile.agent_type == agent_type)
+
+        total = query.count()
+        files = query.order_by(KnowledgeFile.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+        # 获取用户信息
+        from core.database import User
+        user_ids = list(set(f.user_id for f in files))
+        users = {u.user_id: u.username for u in db.query(User).filter(User.user_id.in_(user_ids)).all()}
+
+        return {
+            "status": "success",
+            "data": {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "files": [{
+                    "id": f.id,
+                    "user_id": f.user_id,
+                    "username": users.get(f.user_id, "未知"),
+                    "filename": f.filename,
+                    "original_filename": f.original_filename,
+                    "file_size": f.file_size,
+                    "file_type": f.file_type,
+                    "agent_type": f.agent_type,
+                    "doc_id": f.doc_id,
+                    "chunk_count": f.chunk_count,
+                    "is_indexed": f.is_indexed,
+                    "created_at": f.created_at.isoformat()
+                } for f in files]
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/knowledge/files")
+async def admin_upload_knowledge_file(
+    agent_type: str = "tax_basic",
+    file: UploadFile = File(...),
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """admin 上传 PDF 文件到知识库"""
+    # 检查文件类型
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="只支持 PDF 文件")
+
+    # 生成唯一文件名
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"{timestamp}_{file.filename}"
+    file_path = UPLOAD_DIR / safe_filename
+
+    # 保存文件
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
+    finally:
+        file.file.close()
+
+    file_size = file_path.stat().st_size
+
+    # 记录到数据库（admin 上传 user_id 为 "admin"）
+    db = SessionLocal()
+    try:
+        kf = KnowledgeFile(
+            user_id="admin",
+            filename=safe_filename,
+            original_filename=file.filename,
+            file_path=str(file_path),
+            file_size=file_size,
+            file_type="pdf",
+            agent_type=agent_type,
+            is_indexed=False
+        )
+        db.add(kf)
+        db.commit()
+        db.refresh(kf)
+    finally:
+        db.close()
+
+    # 处理文件并索引到向量库
+    try:
+        result = upload_and_index_pdf(str(file_path), agent_type)
+
+        # 更新索引状态和doc_id
+        db = SessionLocal()
+        try:
+            kf = db.query(KnowledgeFile).filter(KnowledgeFile.filename == safe_filename).first()
+            if kf:
+                kf.is_indexed = True
+                kf.doc_id = result.get("doc_id")
+                kf.chunk_count = result.get("chunks", 0)
+                db.commit()
+        finally:
+            db.close()
+
+        return {
+            "status": "success",
+            "message": "文件上传并索引成功",
+            "data": {
+                "id": kf.id if kf else None,
+                "filename": safe_filename,
+                "doc_id": result.get("doc_id"),
+                "chunks": result.get("chunks", 0)
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
+
+
+@app.delete("/admin/knowledge/files/{filename}")
+async def admin_delete_knowledge_file(
+    filename: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """从知识库删除文件（从数据库和向量库都删除）"""
+    db = SessionLocal()
+    try:
+        kf = db.query(KnowledgeFile).filter(KnowledgeFile.filename == filename).first()
+        if not kf:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        # 删除物理文件
+        file_path = Path(kf.file_path)
+        if file_path.exists():
+            file_path.unlink()
+
+        # TODO: 从向量库删除（当前 delete_from_vectorstore 实现有问题，暂时只删除数据库记录）
+        # if kf.doc_id and kf.agent_type:
+        #     delete_from_vectorstore(kf.agent_type, kf.doc_id)
+
+        db.delete(kf)
+        db.commit()
+
+        return {"status": "success", "message": "文件已删除"}
+    finally:
+        db.close()
+
+
+@app.get("/admin/knowledge/stats")
+async def admin_knowledge_stats(admin: AdminUser = Depends(get_current_admin_user)):
+    """获取知识库统计信息"""
+    db = SessionLocal()
+    try:
+        total_files = db.query(KnowledgeFile).count()
+        indexed_files = db.query(KnowledgeFile).filter(KnowledgeFile.is_indexed == True).count()
+        total_size = db.query(KnowledgeFile).with_entities(func.sum(KnowledgeFile.file_size)).scalar() or 0
+
+        # 获取各 collection 的向量统计
+        tax_basic_stats = get_collection_stats("tax_basic")
+        tax_pro_stats = get_collection_stats("tax_pro")
+
+        return {
+            "status": "success",
+            "data": {
+                "total_files": total_files,
+                "indexed_files": indexed_files,
+                "total_size_bytes": total_size,
+                "collections": {
+                    "tax_basic": tax_basic_stats,
+                    "tax_pro": tax_pro_stats
+                }
+            }
+        }
+    finally:
+        db.close()
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -52,7 +52,7 @@
           <el-input v-model="form.tier_name" placeholder="如: 基础版, 专业版" />
         </el-form-item>
         <el-form-item label="关联Agent" required>
-          <el-select v-model="form.agent_type" placeholder="选择关联的Agent">
+          <el-select v-model="form.agent_type" placeholder="选择关联的Agent" style="width: 100%;">
             <el-option v-for="agent in agents" :key="agent.id" :label="`${agent.name} (${agent.agent_type})`" :value="agent.agent_type" />
           </el-select>
         </el-form-item>

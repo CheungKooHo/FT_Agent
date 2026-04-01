@@ -13,7 +13,7 @@
 
       <el-form inline>
         <el-form-item label="分类">
-          <el-select v-model="category" placeholder="全部" clearable @change="loadPolicies">
+          <el-select v-model="category" placeholder="全部" clearable @change="loadPolicies" style="width: 120px;">
             <el-option label="税务" value="tax" />
             <el-option label="财务" value="finance" />
             <el-option label="审计" value="audit" />
@@ -69,14 +69,14 @@
           <el-input v-model="form.title" placeholder="请输入文档标题" />
         </el-form-item>
         <el-form-item label="分类" required>
-          <el-select v-model="form.category" placeholder="请选择分类">
+          <el-select v-model="form.category" placeholder="请选择分类" style="width: 100%;">
             <el-option label="税务" value="tax" />
             <el-option label="财务" value="finance" />
             <el-option label="审计" value="audit" />
           </el-select>
         </el-form-item>
         <el-form-item label="文档类型">
-          <el-select v-model="form.document_type" placeholder="请选择类型">
+          <el-select v-model="form.document_type" placeholder="请选择类型" style="width: 100%;">
             <el-option label="国家级" value="national" />
             <el-option label="省级" value="provincial" />
             <el-option label="地方级" value="local" />

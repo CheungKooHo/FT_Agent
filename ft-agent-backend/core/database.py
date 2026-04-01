@@ -38,6 +38,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)     # 用户名
     password_hash = Column(String)                         # 密码哈希
     email = Column(String, unique=True, index=True, nullable=True)  # 邮箱（可选）
+    phone = Column(String, unique=True, index=True, nullable=True)  # 手机号
     nickname = Column(String, nullable=True)               # 昵称
     is_active = Column(Boolean, default=True)              # 是否激活
     created_at = Column(DateTime, default=datetime.utcnow)

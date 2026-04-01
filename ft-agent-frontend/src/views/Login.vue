@@ -100,6 +100,18 @@
               </el-input>
             </el-form-item>
 
+            <el-form-item label="手机号" prop="phone">
+              <el-input
+                v-model="registerForm.phone"
+                placeholder="请输入手机号（可选）"
+                clearable
+              >
+                <template #prefix>
+                  <el-icon><Phone /></el-icon>
+                </template>
+              </el-input>
+            </el-form-item>
+
             <el-form-item label="密码" prop="password">
               <el-input
                 v-model="registerForm.password"
@@ -176,6 +188,7 @@ const registerForm = reactive({
   username: '',
   nickname: '',
   email: '',
+  phone: '',
   password: '',
   confirmPassword: ''
 })
@@ -195,6 +208,7 @@ const registerRules = {
   ],
   nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
   email: [{ type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码长度不能少于 6 个字符', trigger: 'blur' }
