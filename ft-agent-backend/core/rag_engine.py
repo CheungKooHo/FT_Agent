@@ -135,9 +135,9 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
 
 def search_knowledge(query: str, collection_name: str):
     """搜索知识库并返回合并的文本结果（用于增强Prompt）
-    通用策略：向量检索 + 列表项智能合并
-    - 召回更多候选chunks
-    - 如果检索到列表项chunk（包含序号），则合并其前一个包含政策关键词的chunk
+    通用策略：向量检索 + 关键词兜底检索
+    - 向量检索召回候选chunks
+    - 如果top结果不包含查询关键词，则补充关键词检索
     """
     import re
 
@@ -152,7 +152,7 @@ def search_knowledge(query: str, collection_name: str):
     try:
         query_vector = embeddings.embed_query(query)
 
-        # 召回更多候选
+        # 第一路召回：向量检索
         search_results = client.query_points(
             collection_name=collection_name,
             query=query_vector,
@@ -175,6 +175,36 @@ def search_knowledge(query: str, collection_name: str):
 
         candidate_chunks = list(candidate_map.values())
         candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
+
+        # 检查top结果是否包含查询关键词
+        query_keywords = [w for w in query if len(w) >= 2]
+        top_has_keyword = any(
+            any(kw in c["content"] for kw in query_keywords)
+            for c in candidate_chunks[:5]
+        )
+
+        # 如果top结果不包含关键词，补充关键词召回
+        if not top_has_keyword and query_keywords:
+            # scroll所有chunks做关键词匹配
+            all_results = client.scroll(collection_name=collection_name, limit=200)
+            for point in all_results[0]:
+                payload = point.payload
+                content = payload.get("page_content", "")
+                key = (payload.get("metadata", {}).get("doc_id", ""), payload.get("metadata", {}).get("chunk_index", 0))
+                if key not in candidate_map:
+                    # 检查是否包含关键词
+                    for kw in query_keywords:
+                        if kw in content:
+                            candidate_map[key] = {
+                                "content": content,
+                                "doc_id": payload.get("metadata", {}).get("doc_id", ""),
+                                "chunk_index": payload.get("metadata", {}).get("chunk_index", 0),
+                                "score": 0.3  # 关键词匹配得分
+                            }
+                            break
+
+            candidate_chunks = list(candidate_map.values())
+            candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
 
         # 通用策略：如果检索到的chunk是列表项（以序号开头），往前找header合并
         final_contents = []
