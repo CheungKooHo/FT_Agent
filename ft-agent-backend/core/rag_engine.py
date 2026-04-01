@@ -87,16 +87,35 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     return {"status": "success", "doc_id": doc_id, "chunks": len(texts)}
 
 def search_knowledge(query: str, collection_name: str):
+    """搜索知识库并返回合并的文本结果（用于增强Prompt）"""
     embeddings = get_embeddings()
+    client = get_qdrant_client()
 
-    # 连接本地库并搜索
-    vectorstore = Qdrant.from_existing_index(
-        embeddings=embeddings,
-        path="./local_qdrant",
-        collection_name=collection_name
-    )
-    docs = vectorstore.similarity_search(query, k=3)
-    return "\n".join([doc.page_content for doc in docs])
+    try:
+        # 验证 collection 是否存在
+        client.get_collection(collection_name)
+    except Exception:
+        return ""
+
+    try:
+        # 将查询文本转为向量
+        query_vector = embeddings.embed_query(query)
+
+        # 执行搜索
+        search_results = client.query_points(
+            collection_name=collection_name,
+            query=query_vector,
+            limit=3
+        )
+
+        # 合并结果
+        contents = []
+        for result in search_results.points:
+            contents.append(result.payload.get("page_content", ""))
+        return "\n".join(contents)
+    except Exception as e:
+        print(f"RAG search error: {e}")
+        return ""
 
 def search_knowledge_preview(query: str, collection_name: str, top_k: int = 5):
     """
