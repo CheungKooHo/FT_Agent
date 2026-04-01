@@ -158,6 +158,16 @@ const api = {
 
   searchKnowledge: (query, agentType, topK = 5) => {
     return request.get('/admin/knowledge/search', { params: { query, agent_type: agentType, top_k: topK } })
+  },
+
+  exportKnowledge: (agentType = null) => {
+    return request.get('/admin/knowledge/export', { params: { agent_type: agentType } })
+  },
+
+  importKnowledge: (formData) => {
+    return request.post('/admin/knowledge/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
   }
 }
 

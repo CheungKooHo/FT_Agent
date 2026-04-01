@@ -40,10 +40,20 @@
       <template #header>
         <div class="card-header">
           <span>RAG 知识库管理</span>
-          <el-button type="primary" @click="showUploadDialog">
-            <el-icon><Plus /></el-icon>
-            上传文档
-          </el-button>
+          <div class="header-actions">
+            <el-button @click="handleExport">
+              <el-icon><Download /></el-icon>
+              导出
+            </el-button>
+            <el-button @click="showImportDialog">
+              <el-icon><Upload /></el-icon>
+              导入
+            </el-button>
+            <el-button type="primary" @click="showUploadDialog">
+              <el-icon><Plus /></el-icon>
+              上传文档
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -193,6 +203,30 @@
       </template>
     </el-dialog>
 
+    <!-- 导入对话框 -->
+    <el-dialog v-model="importDialogVisible" title="导入知识库" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="导入文件">
+          <el-upload
+            ref="importRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".json"
+            :on-change="handleImportFileChange"
+          >
+            <el-button type="primary">选择 JSON 文件</el-button>
+            <template #tip>
+              <div class="el-upload__tip">只能上传 JSON 格式的导出文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitImport" :loading="uploading">导入</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 预览对话框 -->
     <el-dialog v-model="previewDialogVisible" title="文档内容预览" width="80%" max-width="900px" destroy-on-close>
       <div v-if="previewLoading" style="text-align: center; padding: 40px;">
@@ -225,7 +259,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { Plus, Loading } from '@element-plus/icons-vue'
+import { Plus, Loading, Download, Upload } from '@element-plus/icons-vue'
 
 // RAG 测试
 const testAgentType = ref('tax_basic')
@@ -276,6 +310,10 @@ const previewDialogVisible = ref(false)
 const previewLoading = ref(false)
 const previewChunks = ref([])
 const previewFileName = ref('')
+
+const importDialogVisible = ref(false)
+const importRef = ref(null)
+const importFile = ref(null)
 
 const getAgentTypeName = (type) => {
   const map = { tax_basic: '税务基础版', tax_pro: '税务专业版' }
@@ -362,6 +400,58 @@ const submitUpload = async () => {
   }
 }
 
+const handleExport = async () => {
+  try {
+    const response = await api.exportKnowledge(agentType.value || null)
+    const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `knowledge_export_${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
+
+const showImportDialog = () => {
+  importFile.value = null
+  if (importRef.value) {
+    importRef.value.clearFiles()
+  }
+  importDialogVisible.value = true
+}
+
+const handleImportFileChange = (file) => {
+  importFile.value = file.raw
+}
+
+const submitImport = async () => {
+  if (!importFile.value) {
+    ElMessage.warning('请选择导入文件')
+    return
+  }
+
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', importFile.value)
+    await api.importKnowledge(formData)
+    ElMessage.success('导入成功')
+    importDialogVisible.value = false
+    loadFiles()
+    loadStats()
+  } catch (error) {
+    ElMessage.error('导入失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
 const previewFile = async (file) => {
   previewFileName.value = file.original_filename
   previewChunks.value = []
@@ -410,6 +500,11 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .stat-item {

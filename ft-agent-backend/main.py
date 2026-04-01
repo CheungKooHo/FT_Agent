@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 import shutil
+import json
 from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
 from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
@@ -2059,6 +2060,104 @@ async def admin_knowledge_search(
     """RAG 检索测试"""
     result = search_knowledge_preview(query, agent_type, top_k)
     return result
+
+
+@app.get("/admin/knowledge/export")
+async def admin_export_knowledge(
+    agent_type: str = None,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """导出知识库文件列表"""
+    db = SessionLocal()
+    try:
+        query = db.query(KnowledgeFile)
+        if agent_type:
+            query = query.filter(KnowledgeFile.agent_type == agent_type)
+        files = query.order_by(KnowledgeFile.created_at.desc()).all()
+
+        export_data = []
+        for f in files:
+            export_data.append({
+                "original_filename": f.original_filename,
+                "filename": f.filename,
+                "agent_type": f.agent_type,
+                "file_size": f.file_size,
+                "chunk_count": f.chunk_count,
+                "is_indexed": f.is_indexed,
+                "doc_id": f.doc_id,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            })
+
+        return {
+            "status": "success",
+            "data": {
+                "export_time": datetime.utcnow().isoformat(),
+                "total_files": len(export_data),
+                "files": export_data
+            }
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/knowledge/import")
+async def admin_import_knowledge(
+    file: UploadFile = File(...),
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """导入知识库文件列表（JSON格式）"""
+    db = SessionLocal()
+    try:
+        content = await file.read()
+        data = json.loads(content.decode('utf-8'))
+
+        if "files" not in data:
+            raise HTTPException(status_code=400, detail="无效的导入文件格式")
+
+        imported_count = 0
+        for item in data["files"]:
+            # 检查是否已存在
+            existing = db.query(KnowledgeFile).filter(
+                KnowledgeFile.filename == item.get("filename")
+            ).first()
+
+            if existing:
+                # 更新现有记录
+                existing.original_filename = item.get("original_filename", existing.original_filename)
+                existing.agent_type = item.get("agent_type", existing.agent_type)
+                existing.chunk_count = item.get("chunk_count", existing.chunk_count)
+                existing.is_indexed = item.get("is_indexed", existing.is_indexed)
+                existing.doc_id = item.get("doc_id", existing.doc_id)
+            else:
+                # 创建新记录（不复制文件）
+                kf = KnowledgeFile(
+                    user_id="admin",
+                    username="admin",
+                    filename=item.get("filename"),
+                    original_filename=item.get("original_filename", item.get("filename")),
+                    file_path="",
+                    file_size=item.get("file_size", 0),
+                    agent_type=item.get("agent_type"),
+                    doc_id=item.get("doc_id"),
+                    chunk_count=item.get("chunk_count", 0),
+                    is_indexed=item.get("is_indexed", False)
+                )
+                db.add(kf)
+
+            imported_count += 1
+
+        db.commit()
+        return {
+            "status": "success",
+            "message": f"成功导入 {imported_count} 条记录"
+        }
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="无效的 JSON 文件")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
