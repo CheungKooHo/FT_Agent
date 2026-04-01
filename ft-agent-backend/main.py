@@ -15,7 +15,7 @@ from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
 from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
 from sqlalchemy import func
-from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats
+from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats, get_file_chunks
 from core.memory import MemoryManager
 from core.security import create_access_token, verify_token
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
@@ -2024,6 +2024,27 @@ async def admin_knowledge_stats(admin: AdminUser = Depends(get_current_admin_use
                 }
             }
         }
+    finally:
+        db.close()
+
+
+@app.get("/admin/knowledge/files/{filename}/chunks")
+async def admin_get_file_chunks(
+    filename: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """获取指定文件的 chunks 列表"""
+    db = SessionLocal()
+    try:
+        kf = db.query(KnowledgeFile).filter(KnowledgeFile.filename == filename).first()
+        if not kf:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        if not kf.doc_id or not kf.agent_type:
+            return {"status": "success", "chunks": [], "total": 0, "message": "文件未索引"}
+
+        result = get_file_chunks(kf.agent_type, kf.doc_id)
+        return result
     finally:
         db.close()
 

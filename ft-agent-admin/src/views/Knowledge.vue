@@ -93,9 +93,10 @@
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="100">
+        <el-table-column label="操作" fixed="right" width="150">
           <template #default="{ row }">
-            <el-button size="small" type="danger" @click="deleteFile(row)">删除</el-button>
+            <el-button size="small" type="primary" link @click="previewFile(row)">预览</el-button>
+            <el-button size="small" type="danger" link @click="deleteFile(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -139,6 +140,32 @@
         <el-button type="primary" @click="submitUpload" :loading="uploading">上传</el-button>
       </template>
     </el-dialog>
+
+    <!-- 预览对话框 -->
+    <el-dialog v-model="previewDialogVisible" title="文档内容预览" width="80%" max-width="900px" destroy-on-close>
+      <div v-if="previewLoading" style="text-align: center; padding: 40px;">
+        <el-icon class="is-loading" :size="30"><Loading /></el-icon>
+        <p>加载中...</p>
+      </div>
+      <div v-else-if="previewChunks.length === 0" style="text-align: center; padding: 40px; color: #909399;">
+        暂无索引内容
+      </div>
+      <div v-else class="chunks-container">
+        <div class="chunk-item" v-for="(chunk, index) in previewChunks" :key="index">
+          <div class="chunk-header">
+            <span class="chunk-index">#{{ chunk.chunk_index + 1 }}</span>
+            <span class="chunk-source">{{ chunk.source }}</span>
+          </div>
+          <div class="chunk-content">{{ chunk.content }}</div>
+        </div>
+      </div>
+      <template #footer v-if="previewChunks.length > 0">
+        <div class="preview-footer">
+          <span class="chunk-count">共 {{ previewChunks.length }} 个切片</span>
+          <el-button @click="previewDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -146,7 +173,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Loading } from '@element-plus/icons-vue'
 
 const files = ref([])
 const loading = ref(false)
@@ -163,6 +190,11 @@ const uploadForm = reactive({
   agentType: 'tax_basic',
   file: null
 })
+
+const previewDialogVisible = ref(false)
+const previewLoading = ref(false)
+const previewChunks = ref([])
+const previewFileName = ref('')
 
 const getAgentTypeName = (type) => {
   const map = { tax_basic: '税务基础版', tax_pro: '税务专业版' }
@@ -249,6 +281,25 @@ const submitUpload = async () => {
   }
 }
 
+const previewFile = async (file) => {
+  previewFileName.value = file.original_filename
+  previewChunks.value = []
+  previewDialogVisible.value = true
+  previewLoading.value = true
+  try {
+    const response = await api.getFileChunks(file.filename)
+    if (response.status === 'success') {
+      previewChunks.value = response.chunks || []
+    } else {
+      ElMessage.error(response.message || '加载预览失败')
+    }
+  } catch (error) {
+    ElMessage.error('加载预览失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
 const deleteFile = async (file) => {
   try {
     await ElMessageBox.confirm(`确定删除文件 "${file.original_filename}" 吗？`, '提示')
@@ -294,5 +345,63 @@ onMounted(() => {
   font-size: 14px;
   color: #909399;
   margin-top: 8px;
+}
+
+.chunks-container {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.chunk-item {
+  margin-bottom: 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.chunk-item:last-child {
+  margin-bottom: 0;
+}
+
+.chunk-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f5f7fa;
+}
+
+.chunk-index {
+  background: #409eff;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.chunk-source {
+  color: #909399;
+  font-size: 12px;
+}
+
+.chunk-content {
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.preview-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chunk-count {
+  color: #909399;
+  font-size: 13px;
 }
 </style>

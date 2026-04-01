@@ -150,6 +150,10 @@ const api = {
 
   getKnowledgeStats: () => {
     return request.get('/admin/knowledge/stats')
+  },
+
+  getFileChunks: (filename) => {
+    return request.get(`/admin/knowledge/files/${filename}/chunks`)
   }
 }
 

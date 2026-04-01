@@ -109,6 +109,34 @@ def get_collection_stats(collection_name: str):
     except Exception:
         return {"status": "success", "vectors_count": 0, "points_count": 0}
 
+def get_file_chunks(collection_name: str, doc_id: str):
+    """获取指定文档的所有 chunks"""
+    client = get_qdrant_client()
+    try:
+        # 查询该 doc_id 的所有 points
+        results = client.scroll(
+            collection_name=collection_name,
+            scroll_filter={
+                "must": [
+                    {"key": "metadata.doc_id", "match": {"value": doc_id}}
+                ]
+            },
+            limit=1000
+        )
+        chunks = []
+        for point in results[0]:
+            if point.payload and "page_content" in point.payload:
+                chunks.append({
+                    "chunk_index": point.payload.get("metadata", {}).get("chunk_index", 0),
+                    "content": point.payload["page_content"],
+                    "source": point.payload.get("source", "未知")
+                })
+        # 按 chunk_index 排序
+        chunks.sort(key=lambda x: x["chunk_index"])
+        return {"status": "success", "chunks": chunks, "total": len(chunks)}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "chunks": [], "total": 0}
+
 def delete_from_vectorstore(collection_name: str, doc_id: str):
     """根据doc_id从向量库删除"""
     client = get_qdrant_client()
