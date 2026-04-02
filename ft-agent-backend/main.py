@@ -16,7 +16,7 @@ from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
 from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
 from sqlalchemy import func
-from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats, get_file_chunks
+from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats, get_file_chunks, delete_from_vectorstore
 from core.memory import MemoryManager
 from core.security import create_access_token, verify_token
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
@@ -515,8 +515,12 @@ async def delete_knowledge_file(
         db.delete(kf)
         db.commit()
 
-        # TODO: 从向量库删除（需要根据doc_id删除）
-        # 目前向量库不支持精确删除，先标记
+        # 从向量库删除
+        if kf.agent_type and kf.doc_id:
+            try:
+                delete_from_vectorstore(kf.agent_type, kf.doc_id)
+            except Exception as e:
+                print(f"向量库删除失败: {e}")
 
         return {
             "status": "success",
@@ -1951,9 +1955,12 @@ async def admin_delete_knowledge_file(
         if file_path.exists():
             file_path.unlink()
 
-        # TODO: 从向量库删除（当前 delete_from_vectorstore 实现有问题，暂时只删除数据库记录）
-        # if kf.doc_id and kf.agent_type:
-        #     delete_from_vectorstore(kf.agent_type, kf.doc_id)
+        # 从向量库删除
+        if kf.doc_id and kf.agent_type:
+            try:
+                delete_from_vectorstore(kf.agent_type, kf.doc_id)
+            except Exception as e:
+                print(f"向量库删除失败: {e}")
 
         db.delete(kf)
         db.commit()

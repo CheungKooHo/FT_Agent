@@ -377,22 +377,33 @@ def get_file_chunks(collection_name: str, doc_id: str):
 
 def delete_from_vectorstore(collection_name: str, doc_id: str):
     """根据doc_id从向量库删除"""
+    from qdrant_client.models import Filter, FieldCondition, MatchValue, Payload
+
     client = get_qdrant_client()
     try:
+        # 先找到所有匹配的point IDs
+        results = client.scroll(
+            collection_name=collection_name,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="metadata.doc_id", match=MatchValue(value=doc_id))
+                ]
+            ),
+            limit=1000
+        )
+
+        if not results[0]:
+            return {"status": "success", "deleted": 0}
+
+        # 获取所有point id
+        point_ids = [point.id for point in results[0]]
+
+        # 删除这些points
         client.delete(
             collection_name=collection_name,
-            points_selector={
-                "points": client.search(
-                    collection_name=collection_name,
-                    query_vector=[0] * 384,  # dummy vector, we'll filter
-                    query_filter={
-                        "must": [
-                            {"key": "metadata.doc_id", "match": {"value": doc_id}}
-                        ]
-                    }
-                )
-            } if False else None  # 简化：暂不支持按doc_id删除，改用标记方式
+            points_selector=point_ids
         )
-        return {"status": "success", "deleted": 0}
+
+        return {"status": "success", "deleted": len(point_ids)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
