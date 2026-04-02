@@ -449,31 +449,6 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
 
 
-@app.get("/uploaded_files")
-async def list_uploaded_files(user: User = Depends(get_current_user)):
-    """
-    列出当前用户上传的文件
-    """
-    db = SessionLocal()
-    try:
-        files = db.query(KnowledgeFile).filter(KnowledgeFile.user_id == user.user_id).all()
-        return {
-            "status": "success",
-            "files": [{
-                "filename": f.filename,
-                "original_filename": f.original_filename,
-                "size": f.file_size,
-                "agent_type": f.agent_type,
-                "doc_id": f.doc_id,
-                "chunk_count": f.chunk_count,
-                "is_indexed": f.is_indexed,
-                "created_at": f.created_at.isoformat()
-            } for f in files]
-        }
-    finally:
-        db.close()
-
-
 # ==================== 知识库管理接口 ====================
 
 @app.get("/knowledge/files")

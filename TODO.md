@@ -207,12 +207,12 @@ FT-Agent/
 ## 发现的问题
 
 ### 1. 冗余API端点
-- `/uploaded_files` 与 `/knowledge/files` 功能重复
-- `/upload_policy` 已弃用但未删除
+- `/uploaded_files` ✅ 已删除
+- `/upload_policy` ✅ 已删除
 
 ### 2. 冗余数据库表
-- `policy_documents` 表存在但RAG不直接使用
-- `user_tier_relations` 与 `subscriptions` 功能重复
+- `policy_documents` 表存在但RAG不直接使用（管理端Policies.vue仍使用）
+- `user_tier_relations` 与 `subscriptions` 功能重复（部分死代码）
 
 ### 3. RAG知识库问题
 **问题**: agent有时不按文件内容回答，或过度依赖文件
@@ -224,8 +224,15 @@ FT-Agent/
 
 ### 4. Agent Prompt配置
 - tier_config.py中hardcoded了默认prompt
-- 但engine.py优先从数据库AgentConfig读取
-- 需要确保数据库中的prompt配置正确
+- engine.py优先从数据库AgentConfig读取
+- 数据库若无配置则用tier_config的默认值
+
+---
+
+## 已完成清理
+
+- [x] 删除 `/upload_policy` 弃用端点
+- [x] 删除前端未使用的 `getUploadedFiles` API
 
 ---
 
@@ -233,19 +240,15 @@ FT-Agent/
 
 ### 高优先级
 - [ ] **测试RAG对话**: 验证agent能否正确使用检索结果回答
-- [ ] 清理冗余API: 删除 `/uploaded_files` 或 `/knowledge/files`
-- [ ] 清理冗余代码: 删除弃用的 `/upload_policy` 端点
 
 ### 中优先级
-- [ ] 清理冗余数据库表: 评估是否删除 `policy_documents`、`user_tier_relations`
-- [ ] Agent配置数据库化: 确保所有prompt从数据库读取
+- [ ] 清理 `UserTierRelation` 死代码
 - [ ] PostgreSQL生产环境配置
 
 ### 低优先级
 - [ ] 微信/钉钉集成
 - [ ] 更详细的对话分析统计
 - [ ] 多语言支持
-- [ ] 用户反馈收集机制
 
 ---
 
