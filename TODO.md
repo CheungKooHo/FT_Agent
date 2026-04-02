@@ -97,7 +97,6 @@ FT-Agent/
 | 表名 | 用途 | 备注 |
 |------|------|------|
 | policy_documents | 政策文档 | ⚠️ 表存在但RAG用knowledge_files+向量库 |
-| user_tier_relations | 用户-等级关联 | ⚠️ subscriptions已替代 |
 | admin_users | 管理员 | ⚠️ 独立表，但后端只用一个admin账户 |
 | system_configs | 系统配置 | ⚠️ 预留，未见使用 |
 
@@ -212,7 +211,6 @@ FT-Agent/
 
 ### 2. 冗余数据库表
 - `policy_documents` 表存在但RAG不直接使用（管理端Policies.vue仍使用）
-- `user_tier_relations` 与 `subscriptions` 功能重复（部分死代码）
 
 ### 3. RAG知识库问题
 **问题**: agent有时不按文件内容回答，或过度依赖文件
@@ -239,13 +237,16 @@ FT-Agent/
 ## 待办事项 (按优先级)
 
 ### 高优先级
-- [ ] **测试RAG对话**: 验证agent能否正确使用检索结果回答
+- [x] **测试RAG对话**: ✅ 通过，Agent能正确使用检索结果回答
 
 ### 中优先级
-- [ ] PostgreSQL生产环境配置
+- [x] **PostgreSQL生产环境配置**: ✅ 已完善
+  - 修复 docker-compose.yml 路径错误 (universal-agent-* → ft-agent-*)
+  - 重写 migrate_db.py，迁移全部 13 张表
+  - 新增 Qdrant 向量库迁移说明
+  - 创建 .env 配置文件模板
 
 ### 低优先级
-- [ ] 微信/钉钉集成
 - [ ] 更详细的对话分析统计
 - [ ] 多语言支持
 

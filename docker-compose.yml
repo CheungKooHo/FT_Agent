@@ -25,7 +25,7 @@ services:
   # 后端服务
   backend:
     build:
-      context: ./universal-agent-backend
+      context: ./ft-agent-backend
       dockerfile: Dockerfile
     container_name: agent-backend
     environment:
@@ -62,7 +62,7 @@ services:
   # 前端服务
   frontend:
     build:
-      context: ./universal-agent-frontend
+      context: ./ft-agent-frontend
       dockerfile: Dockerfile
     container_name: agent-frontend
     ports:
