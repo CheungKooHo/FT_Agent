@@ -242,7 +242,6 @@ FT-Agent/
 - [ ] **测试RAG对话**: 验证agent能否正确使用检索结果回答
 
 ### 中优先级
-- [ ] 清理 `UserTierRelation` 死代码
 - [ ] PostgreSQL生产环境配置
 
 ### 低优先级

@@ -1039,11 +1039,11 @@ async def admin_get_overview(admin: AdminUser = Depends(get_current_admin_user))
         total_knowledge_files = db.query(KnowledgeFile).count()
         indexed_files = db.query(KnowledgeFile).filter(KnowledgeFile.is_indexed == True).count()
 
-        # Agent 分布
+        # Agent 分布（基于subscriptions表，UserTierRelation已弃用）
         agent_counts = {}
-        for ut in db.query(UserTierRelation).all():
-            tier_config = next((t for t in TIER_CONFIGS if t["id"] == ut.tier_id), None)
-            tier_name = tier_config["name"] if tier_config else ut.tier_id
+        for sub in db.query(Subscription).filter(Subscription.status == "active").all():
+            tier_obj = db.query(UserTier).filter(UserTier.id == sub.tier_id).first()
+            tier_name = tier_obj.tier_name if tier_obj else "未知"
             agent_counts[tier_name] = agent_counts.get(tier_name, 0) + 1
 
         # Token 账户统计
