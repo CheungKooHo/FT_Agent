@@ -108,10 +108,6 @@ const api = {
     })
   },
 
-  getUploadedFiles: () => {
-    return request.get('/uploaded_files')
-  },
-
   // 知识库管理
   getKnowledgeFiles: () => {
     return request.get('/knowledge/files')

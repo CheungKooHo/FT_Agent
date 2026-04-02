@@ -366,18 +366,6 @@ async def update_user_info(user_id: str, request: UserUpdateRequest):
 
 # ==================== RAG 相关接口 ====================
 
-@app.post("/upload_policy")
-async def upload_policy(agent_type: str, file_path: str):
-    """
-    上传 PDF 文档到知识库（通过文件路径）
-
-    已弃用，推荐使用 /upload_file
-    """
-    # agent_type 决定了知识存入哪个 collection
-    # file_path 是你电脑上 PDF 的绝对路径
-    result = upload_and_index_pdf(file_path, agent_type)
-    return {"status": result}
-
 @app.post("/upload_file")
 async def upload_file(
     agent_type: str,
