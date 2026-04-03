@@ -28,7 +28,7 @@ class MemoryManager:
 
     # ==================== 对话历史管理 ====================
 
-    def add_message(self, role: str, content: str, agent_type: str):
+    def add_message(self, role: str, content: str, agent_type: str, references: Optional[List] = None):
         """
         添加一条对话消息到历史记录
 
@@ -36,13 +36,16 @@ class MemoryManager:
             role: "user" 或 "assistant"
             content: 消息内容
             agent_type: 使用的 agent 类型
+            references: 引用知识库文档列表
         """
+        import json
         message = ConversationHistory(
             user_id=self.user_id,
             session_id=self.session_id,
             agent_type=agent_type,
             role=role,
-            content=content
+            content=content,
+            references=json.dumps(references) if references else None
         )
         self.db.add(message)
         self.db.commit()
@@ -75,10 +78,17 @@ class MemoryManager:
         ).limit(limit).all()
 
         # 反转顺序，使其从旧到新
-        return [
-            {"role": msg.role, "content": msg.content}
-            for msg in reversed(messages)
-        ]
+        import json
+        result = []
+        for msg in reversed(messages):
+            item = {"role": msg.role, "content": msg.content}
+            if msg.references:
+                try:
+                    item["references"] = json.loads(msg.references)
+                except Exception:
+                    item["references"] = []
+            result.append(item)
+        return result
 
     def clear_conversation_history(self, agent_type: Optional[str] = None):
         """

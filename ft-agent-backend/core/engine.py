@@ -381,7 +381,7 @@ def run_agent(
         # --- 7. 保存对话到记忆系统 ---
         if use_memory and memory_manager:
             memory_manager.add_message("user", user_input, agent_type)
-            memory_manager.add_message("assistant", assistant_message, agent_type)
+            memory_manager.add_message("assistant", assistant_message, agent_type, references=references)
 
         return {
             "response": assistant_message,

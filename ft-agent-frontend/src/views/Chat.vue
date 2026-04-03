@@ -352,12 +352,13 @@ const handleClearChat = async () => {
 
 const loadHistory = async () => {
   try {
-    const res = await api.getConversationHistory(userStore.userInfo.user_id, { limit: 20 })
+    const res = await api.getConversationHistory(userStore.userInfo.user_id, { limit: 50 })
     if (res.status === 'success' && res.data.length) {
       messages.value = res.data.map(m => ({
         id: ++msgId,
         role: m.role,
         content: m.content,
+        references: m.references || [],
         time: formatTime()
       }))
       scrollBottom()

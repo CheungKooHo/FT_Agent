@@ -84,6 +84,7 @@ class ConversationHistory(Base):
     agent_type = Column(String, index=True)              # 使用的 agent 类型
     role = Column(String)                                # "user" 或 "assistant"
     content = Column(Text)                               # 消息内容
+    references = Column(Text, nullable=True)              # 引用知识库文档列表（JSON格式）
     created_at = Column(DateTime, default=datetime.utcnow) # 创建时间
 
     __table_args__ = (
@@ -277,4 +278,14 @@ class KnowledgeFile(Base):
 # 初始化数据库
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+    # 迁移：为 conversation_history 表添加 references 列（如果不存在）
+    if "sqlite" in str(engine.url):
+        from sqlalchemy import text
+        try:
+            engine.execute(text("ALTER TABLE conversation_history ADD COLUMN references TEXT"))
+            print("✓ conversation_history.references 列已添加")
+        except Exception:
+            pass  # 列已存在
+
     print(f"✓ 数据库表初始化完成")
