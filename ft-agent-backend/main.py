@@ -406,6 +406,14 @@ async def upload_file(
     # 记录到数据库
     db = SessionLocal()
     try:
+        # 检查同名文件是否已有记录，有则清理旧向量避免重复
+        existing = db.query(KnowledgeFile).filter(
+            KnowledgeFile.user_id == user.user_id,
+            KnowledgeFile.original_filename == file.filename
+        ).first()
+        if existing and existing.doc_id:
+            delete_from_vectorstore(existing.doc_id, agent_type)
+
         kf = KnowledgeFile(
             user_id=user.user_id,
             filename=safe_filename,
@@ -2000,6 +2008,14 @@ async def admin_upload_knowledge_file(
     # 记录到数据库（admin 上传 user_id 为 "admin"）
     db = SessionLocal()
     try:
+        # 检查同名文件是否已有记录，有则清理旧向量避免重复
+        existing = db.query(KnowledgeFile).filter(
+            KnowledgeFile.user_id == "admin",
+            KnowledgeFile.original_filename == file.filename
+        ).first()
+        if existing and existing.doc_id:
+            delete_from_vectorstore(existing.doc_id, agent_type)
+
         kf = KnowledgeFile(
             user_id="admin",
             filename=safe_filename,
