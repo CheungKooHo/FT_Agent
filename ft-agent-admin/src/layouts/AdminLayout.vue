@@ -26,6 +26,10 @@
           <el-icon><Coin /></el-icon>
           <span>Token统计</span>
         </el-menu-item>
+        <el-menu-item index="/conversation-stats">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>对话分析</span>
+        </el-menu-item>
         <el-menu-item index="/agents">
           <el-icon><Operation /></el-icon>
           <span>Agent配置</span>
@@ -61,7 +65,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection } from '@element-plus/icons-vue'
+import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection, ChatDotRound } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

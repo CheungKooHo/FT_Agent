@@ -34,6 +34,11 @@ const routes = [
         component: () => import('@/views/Tokens.vue')
       },
       {
+        path: 'conversation-stats',
+        name: 'ConversationStats',
+        component: () => import('@/views/ConversationStats.vue')
+      },
+      {
         path: 'agents',
         name: 'Agents',
         component: () => import('@/views/Agents.vue')

@@ -69,6 +69,11 @@ const api = {
     return request.get('/admin/stats/token-usage')
   },
 
+  // 对话统计
+  getConversationStats: () => {
+    return request.get('/admin/stats/conversation')
+  },
+
   // 政策文档
   getPolicyDocuments: (page = 1, pageSize = 20, category = null) => {
     const params = { page, page_size: pageSize }

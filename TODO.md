@@ -247,7 +247,10 @@ FT-Agent/
   - 创建 .env 配置文件模板
 
 ### 低优先级
-- [ ] 更详细的对话分析统计
+- [x] **更详细的对话分析统计**: ✅ 已完成
+  - 新增 `/admin/stats/conversation` API
+  - 新增对话统计页面 (ConversationStats.vue)
+  - 支持每日消息趋势、Token消耗趋势、Agent分布、活跃/沉默用户等指标
 - [ ] 多语言支持
 
 ---

@@ -1345,6 +1345,114 @@ async def admin_token_stats(admin: AdminUser = Depends(get_current_admin_user)):
         db.close()
 
 
+@app.get("/admin/stats/conversation")
+async def admin_conversation_stats(admin: AdminUser = Depends(get_current_admin_user)):
+    """对话统计分析"""
+    db = SessionLocal()
+    try:
+        from datetime import datetime, timedelta
+
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=today_start.weekday())
+        month_start = today_start.replace(day=1)
+
+        # 基础统计
+        total_conversations = db.query(ConversationHistory).count()
+        total_users_with_chat = db.query(ConversationHistory.user_id).distinct().count()
+
+        # 对话消息数趋势（最近30天）
+        daily_stats = []
+        for i in range(29, -1, -1):
+            day = today_start - timedelta(days=i)
+            next_day = day + timedelta(days=1)
+            count = db.query(ConversationHistory).filter(
+                ConversationHistory.created_at >= day,
+                ConversationHistory.created_at < next_day
+            ).count()
+            daily_stats.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "messages": count
+            })
+
+        # Token 消耗趋势（最近30天，从 token_transactions 表）
+        daily_token_stats = []
+        for i in range(29, -1, -1):
+            day = today_start - timedelta(days=i)
+            next_day = day + timedelta(days=1)
+            consumed = db.query(TokenTransaction).filter(
+                TokenTransaction.created_at >= day,
+                TokenTransaction.created_at < next_day,
+                TokenTransaction.transaction_type == "consume"
+            ).all()
+            total = sum(abs(t.amount) for t in consumed)
+            daily_token_stats.append({
+                "date": day.strftime("%Y-%m-%d"),
+                "tokens": total
+            })
+
+        # 按 Agent 类型分布
+        agent_stats = {}
+        for conv in db.query(ConversationHistory).distinct(ConversationHistory.agent_type).all():
+            count = db.query(ConversationHistory).filter(
+                ConversationHistory.agent_type == conv.agent_type
+            ).count()
+            agent_stats[conv.agent_type or "unknown"] = count
+
+        # 今日/本周/本月统计
+        today_messages = db.query(ConversationHistory).filter(
+            ConversationHistory.created_at >= today_start
+        ).count()
+        week_messages = db.query(ConversationHistory).filter(
+            ConversationHistory.created_at >= week_start
+        ).count()
+        month_messages = db.query(ConversationHistory).filter(
+            ConversationHistory.created_at >= month_start
+        ).count()
+
+        # 活跃用户（7天内有对话）
+        active_users_7d = db.query(ConversationHistory.user_id).filter(
+            ConversationHistory.created_at >= (now - timedelta(days=7))
+        ).distinct().count()
+
+        # 沉默用户（注册但从未对话）
+        all_users = db.query(User).count()
+        silent_users = all_users - total_users_with_chat
+
+        # 人均对话数
+        avg_messages_per_user = round(total_conversations / total_users_with_chat, 1) if total_users_with_chat > 0 else 0
+
+        # 平均会话长度（每 session 的消息数）
+        sessions = db.query(ConversationHistory.session_id).distinct().count()
+        avg_session_length = round(total_conversations / sessions, 1) if sessions > 0 else 0
+
+        return {
+            "status": "success",
+            "data": {
+                "summary": {
+                    "total_conversations": total_conversations,
+                    "total_users_with_chat": total_users_with_chat,
+                    "active_users_7d": active_users_7d,
+                    "silent_users": silent_users,
+                    "total_users": all_users,
+                    "avg_messages_per_user": avg_messages_per_user,
+                    "avg_session_length": avg_session_length,
+                    "total_sessions": sessions
+                },
+                "time_stats": {
+                    "today_messages": today_messages,
+                    "week_messages": week_messages,
+                    "month_messages": month_messages
+                },
+                "daily_trend": daily_stats,
+                "daily_token_trend": daily_token_stats,
+                "agent_distribution": agent_stats
+            }
+        }
+    finally:
+        db.close()
+
+
 # ==================== Agent 配置管理接口 ====================
 
 @app.get("/admin/agents")
