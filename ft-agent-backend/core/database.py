@@ -282,10 +282,12 @@ def init_db():
     # 迁移：为 conversation_history 表添加 references 列（如果不存在）
     if "sqlite" in str(engine.url):
         from sqlalchemy import text
-        try:
-            engine.execute(text("ALTER TABLE conversation_history ADD COLUMN references TEXT"))
-            print("✓ conversation_history.references 列已添加")
-        except Exception:
-            pass  # 列已存在
+        with engine.connect() as conn:
+            try:
+                conn.execute(text('ALTER TABLE conversation_history ADD COLUMN "references" TEXT'))
+                conn.commit()
+                print("✓ conversation_history.references 列已添加")
+            except Exception:
+                pass  # 列已存在
 
     print(f"✓ 数据库表初始化完成")

@@ -512,23 +512,23 @@ async def delete_knowledge_file(
         if not kf:
             raise HTTPException(status_code=404, detail="文件不存在")
 
-        # 删除物理文件
+        # 删除物理文件（仅用户自己上传的文件有物理文件，引用记录的file_path为None）
         try:
-            if os.path.exists(kf.file_path):
+            if kf.file_path and os.path.exists(kf.file_path):
                 os.remove(kf.file_path)
         except Exception:
             pass
 
-        # 从数据库删除
-        db.delete(kf)
-        db.commit()
-
-        # 从向量库删除
-        if kf.agent_type and kf.doc_id:
+        # 从向量库删除（仅admin文件是权威来源，用户引用共享同一个doc_id不能删向量）
+        if kf.user_id == "admin" and kf.agent_type and kf.doc_id:
             try:
                 delete_from_vectorstore(kf.agent_type, kf.doc_id)
             except Exception as e:
                 print(f"向量库删除失败: {e}")
+
+        # 从数据库删除
+        db.delete(kf)
+        db.commit()
 
         return {
             "status": "success",
@@ -547,11 +547,11 @@ async def save_reference_document(
 ):
     """
     将对话中引用的文档保存到用户知识库
-    通过 doc_id 找到源文件，复制到用户目录后重新索引
+    不复制文件，只创建引用记录，用户共享平台的同一个 doc_id
     """
     db = SessionLocal()
     try:
-        # 找到源文件记录
+        # 找到源文件记录（平台公共文件）
         source_file = db.query(KnowledgeFile).filter(
             KnowledgeFile.doc_id == doc_id,
             KnowledgeFile.agent_type == agent_type
@@ -560,46 +560,31 @@ async def save_reference_document(
         if not source_file:
             raise HTTPException(status_code=404, detail="引用的文档不存在")
 
-        source_path = Path(source_file.file_path)
-        if not source_path.exists():
-            raise HTTPException(status_code=404, detail="源文件不存在，无法保存")
-
-        # 检查用户是否已保存过同名文件
+        # 检查用户是否已保存过该 doc_id
         existing = db.query(KnowledgeFile).filter(
             KnowledgeFile.user_id == user.user_id,
-            KnowledgeFile.original_filename == source_file.original_filename
+            KnowledgeFile.doc_id == doc_id
         ).first()
         if existing:
             return {
                 "status": "success",
                 "message": "文档已在知识库中",
-                "filename": existing.filename,
+                "filename": existing.original_filename,
                 "doc_id": existing.doc_id
             }
 
-        # 复制文件到用户目录
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = f"{timestamp}_{source_file.original_filename}"
-        user_file_path = UPLOAD_DIR / safe_filename
-
-        import shutil
-        shutil.copy2(source_path, user_file_path)
-
-        # 重新索引（生成新的 doc_id）
-        result = upload_and_index_pdf(str(user_file_path), agent_type)
-
-        # 创建用户知识库记录
+        # 创建用户引用记录（指向同一个 doc_id，不复制文件）
         kf = KnowledgeFile(
             user_id=user.user_id,
-            filename=safe_filename,
+            filename=source_file.filename,
             original_filename=source_file.original_filename,
-            file_path=str(user_file_path),
+            file_path=None,  # 物理文件归 admin 所有，用户不复制
             file_size=source_file.file_size,
             file_type="pdf",
             agent_type=agent_type,
             is_indexed=True,
-            doc_id=result.get("doc_id"),
-            chunk_count=result.get("chunks", 0)
+            doc_id=doc_id,
+            chunk_count=source_file.chunk_count
         )
         db.add(kf)
         db.commit()
