@@ -2,7 +2,7 @@ import os
 import tiktoken
 from langchain_openai import ChatOpenAI
 from core.database import SessionLocal, AgentConfig, TokenAccount, TokenTransaction, Subscription, UserTier
-from core.rag_engine import search_knowledge
+from core.rag_engine import search_knowledge, search_knowledge_preview
 from core.memory import MemoryManager
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER
 from typing import Optional
@@ -257,6 +257,7 @@ def run_agent(
 
     # --- 3. 检索知识库 (RAG) ---
     context = ""
+    references = []
     try:
         rag_results = search_knowledge(user_input, agent_type)
         print(f"===== RAG检索结果 =====")
@@ -265,6 +266,11 @@ def run_agent(
         print(f"RAG结果长度: {len(rag_results)}")
         print(f"RAG结果内容: {rag_results[:200] if rag_results else '空'}...")
         print(f"========================")
+
+        # 获取结构化引用（用于前端展示）
+        preview_results = search_knowledge_preview(user_input, agent_type, top_k=5)
+        references = preview_results.get("chunks", []) if preview_results else []
+
         context = rag_results if rag_results else "未找到相关政策背景知识。"
     except Exception as e:
         print(f"RAG 检索异常: {e}")
@@ -380,7 +386,8 @@ def run_agent(
         return {
             "response": assistant_message,
             "token_used": actual_tokens,
-            "tier": tier_config.get("name", "基础版")
+            "tier": tier_config.get("name", "基础版"),
+            "references": references
         }
     except Exception as e:
         return {"error": f"大模型调用失败: {str(e)}", "token_insufficient": False}

@@ -125,6 +125,10 @@ const api = {
     return request.get('/knowledge/stats', { params: { agent_type: agentType } })
   },
 
+  saveReferenceDocument: (docId, source, agentType = 'tax_basic') => {
+    return request.post('/knowledge/save-reference', null, { params: { doc_id: docId, source, agent_type: agentType } })
+  },
+
   // ===== Token 相关 =====
   getTokenBalance: (userId) => {
     return request.get('/token/balance', { params: { user_id: userId } })

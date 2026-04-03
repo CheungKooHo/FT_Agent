@@ -51,6 +51,35 @@
             <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" />
             <span v-else>{{ msg.content }}</span>
           </div>
+
+          <!-- 引用文献列表 -->
+          <div v-if="msg.role === 'assistant' && msg.references && msg.references.length > 0" class="references-section">
+            <div class="references-header">
+              <span class="references-title">参考资料</span>
+              <el-button type="primary" text size="small" @click="saveAllReferences(msg.references)">
+                <el-icon><Download /></el-icon>
+                全部保存
+              </el-button>
+            </div>
+            <div
+              v-for="(ref, idx) in msg.references"
+              :key="idx"
+              class="reference-item"
+            >
+              <span class="ref-index">{{ idx + 1 }}.</span>
+              <span class="ref-source">{{ getRefSource(ref) }}</span>
+              <el-button
+                type="primary"
+                text
+                size="small"
+                :loading="ref.saving"
+                @click="saveReference(ref, msg.references)"
+              >
+                {{ ref.saved ? '已保存' : '保存' }}
+              </el-button>
+            </div>
+          </div>
+
           <div class="message-actions">
             <el-button type="primary" text @click="copyMsg(msg.content)" class="copy-btn">
               <el-icon><CopyDocument /></el-icon>
@@ -243,6 +272,7 @@ const handleSend = async () => {
           id: ++msgId,
           role: 'assistant',
           content: data.response || data,
+          references: data.references || [],
           time: formatTime()
         })
         playSound()
@@ -274,6 +304,39 @@ const handleExport = () => {
   a.click()
   URL.revokeObjectURL(url)
   ElMessage.success('已导出')
+}
+
+const getRefSource = (ref) => {
+  const source = ref.source || ''
+  // 从完整路径中提取文件名
+  if (source.includes('/')) {
+    return source.split('/').pop()
+  }
+  return source || '未知来源'
+}
+
+const saveReference = async (ref, refs) => {
+  if (ref.saved || ref.saving) return
+  ref.saving = true
+  try {
+    const res = await api.saveReferenceDocument(ref.doc_id, ref.source, 'tax_basic')
+    if (res.status === 'success') {
+      ref.saved = true
+      ElMessage.success(res.message || '已保存到知识库')
+    }
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    ref.saving = false
+  }
+}
+
+const saveAllReferences = async (refs) => {
+  for (const ref of refs) {
+    if (!ref.saved && !ref.saving) {
+      await saveReference(ref, refs)
+    }
+  }
 }
 
 const handleClearChat = async () => {
@@ -547,5 +610,45 @@ onActivated(() => {
   .chat-input {
     padding: 16px 24px;
   }
+}
+
+.references-section {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.references-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.references-title {
+  font-weight: 500;
+  color: #606266;
+}
+
+.reference-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  color: #909399;
+}
+
+.ref-index {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.ref-source {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

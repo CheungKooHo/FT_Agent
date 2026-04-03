@@ -538,6 +538,87 @@ async def delete_knowledge_file(
         db.close()
 
 
+@app.post("/knowledge/save-reference")
+async def save_reference_document(
+    doc_id: str,
+    source: str,
+    agent_type: str = "tax_basic",
+    user: User = Depends(get_current_user)
+):
+    """
+    将对话中引用的文档保存到用户知识库
+    通过 doc_id 找到源文件，复制到用户目录后重新索引
+    """
+    db = SessionLocal()
+    try:
+        # 找到源文件记录
+        source_file = db.query(KnowledgeFile).filter(
+            KnowledgeFile.doc_id == doc_id,
+            KnowledgeFile.agent_type == agent_type
+        ).first()
+
+        if not source_file:
+            raise HTTPException(status_code=404, detail="引用的文档不存在")
+
+        source_path = Path(source_file.file_path)
+        if not source_path.exists():
+            raise HTTPException(status_code=404, detail="源文件不存在，无法保存")
+
+        # 检查用户是否已保存过同名文件
+        existing = db.query(KnowledgeFile).filter(
+            KnowledgeFile.user_id == user.user_id,
+            KnowledgeFile.original_filename == source_file.original_filename
+        ).first()
+        if existing:
+            return {
+                "status": "success",
+                "message": "文档已在知识库中",
+                "filename": existing.filename,
+                "doc_id": existing.doc_id
+            }
+
+        # 复制文件到用户目录
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = f"{timestamp}_{source_file.original_filename}"
+        user_file_path = UPLOAD_DIR / safe_filename
+
+        import shutil
+        shutil.copy2(source_path, user_file_path)
+
+        # 重新索引（生成新的 doc_id）
+        result = upload_and_index_pdf(str(user_file_path), agent_type)
+
+        # 创建用户知识库记录
+        kf = KnowledgeFile(
+            user_id=user.user_id,
+            filename=safe_filename,
+            original_filename=source_file.original_filename,
+            file_path=str(user_file_path),
+            file_size=source_file.file_size,
+            file_type="pdf",
+            agent_type=agent_type,
+            is_indexed=True,
+            doc_id=result.get("doc_id"),
+            chunk_count=result.get("chunks", 0)
+        )
+        db.add(kf)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "文档已保存到知识库",
+            "filename": safe_filename,
+            "doc_id": result.get("doc_id"),
+            "chunks": result.get("chunks", 0)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存失败: {str(e)}")
+    finally:
+        db.close()
+
+
 @app.get("/knowledge/search_preview")
 async def preview_knowledge_search(
     query: str,
