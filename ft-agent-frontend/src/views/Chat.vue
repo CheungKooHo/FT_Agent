@@ -207,7 +207,14 @@ const clearDraft = () => localStorage.removeItem(DRAFT_KEY)
 watch(inputMessage, saveDraft)
 
 const formatTime = () => {
-  return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  const now = new Date()
+  return now.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
 }
 
 const scrollBottom = () => {
@@ -359,7 +366,7 @@ const loadHistory = async () => {
         role: m.role,
         content: m.content,
         references: m.references || [],
-        time: formatTime()
+        time: m.time || formatTime()
       }))
       scrollBottom()
     }
