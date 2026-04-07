@@ -34,6 +34,11 @@ request.interceptors.response.use(
       const userStore = useUserStore()
       userStore.logout()
       router.push('/login')
+    } else if (error.response?.status === 403) {
+      ElMessage.error('账号已被禁用，请联系管理员')
+      const userStore = useUserStore()
+      userStore.logout()
+      router.push('/login')
     }
     const message = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(message)

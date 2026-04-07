@@ -1,7 +1,7 @@
 import os
 import tiktoken
 from langchain_openai import ChatOpenAI
-from core.database import SessionLocal, AgentConfig, TokenAccount, TokenTransaction, Subscription, UserTier
+from core.database import SessionLocal, Agent, TokenAccount, TokenTransaction, Subscription, UserTier
 from core.rag_engine import search_knowledge, search_knowledge_preview
 from core.memory import MemoryManager
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER
@@ -175,10 +175,10 @@ def grant_free_token(user_id: str, amount: int = None) -> bool:
     """
     赠送免费 Token（用于新用户注册）
     """
-    from core.tier_config import FREE_TOKEN_GRANT
+    from core.tier_config import TIER_CONFIGS
 
     if amount is None:
-        amount = FREE_TOKEN_GRANT
+        amount = TIER_CONFIGS["basic"]["monthly_token_quota"]
 
     db = SessionLocal()
     try:
@@ -280,7 +280,7 @@ def run_agent(
     # 优先使用数据库中 Agent 配置的 prompt，其次用 tier_config 的
     db = SessionLocal()
     try:
-        agent = db.query(AgentConfig).filter(AgentConfig.agent_type == agent_type, AgentConfig.is_active == True).first()
+        agent = db.query(Agent).filter(Agent.agent_type == agent_type, Agent.is_active == True).first()
         system_prompt = agent.prompt if agent else tier_config.get("system_prompt", TIER_CONFIGS[DEFAULT_TIER]["system_prompt"])
     finally:
         db.close()
@@ -327,7 +327,7 @@ def run_agent(
     # 获取 agent 配置以确定模型
     db = SessionLocal()
     try:
-        config = db.query(AgentConfig).filter(AgentConfig.agent_type == agent_type).first()
+        config = db.query(Agent).filter(Agent.agent_type == agent_type).first()
         model_name = config.model if config else "deepseek-chat"
     finally:
         db.close()

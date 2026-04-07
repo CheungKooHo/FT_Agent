@@ -18,10 +18,6 @@
           <el-icon><User /></el-icon>
           <span>用户管理</span>
         </el-menu-item>
-        <el-menu-item index="/policies">
-          <el-icon><Document /></el-icon>
-          <span>政策管理</span>
-        </el-menu-item>
         <el-menu-item index="/tokens">
           <el-icon><Coin /></el-icon>
           <span>Token统计</span>

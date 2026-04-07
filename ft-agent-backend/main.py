@@ -14,12 +14,12 @@ import shutil
 import json
 from pathlib import Path
 from core.engine import run_agent, grant_free_token, get_token_balance
-from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, PolicyDocument, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
+from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
 from sqlalchemy import func
 from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats, get_file_chunks, delete_from_vectorstore
 from core.memory import MemoryManager
 from core.security import create_access_token, verify_token
-from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
+from core.tier_config import TIER_CONFIGS, DEFAULT_TIER, TOKEN_PRICE_PER_MILLION
 
 # 启动时创建数据库表
 init_db()
@@ -143,8 +143,22 @@ async def register_user(request: UserRegisterRequest):
         db.commit()
         db.refresh(user)
 
-        # 赠送新用户免费 Token
-        grant_free_token(user.user_id, FREE_TOKEN_GRANT)
+        # 赠送新用户免费 Token（基础版1个月配额）
+        free_token_amount = TIER_CONFIGS["basic"]["monthly_token_quota"]
+        grant_free_token(user.user_id, free_token_amount)
+
+        # 自动创建基础版订阅
+        basic_tier = db.query(UserTier).filter(UserTier.tier_code == "basic").first()
+        if basic_tier:
+            subscription = Subscription(
+                user_id=user.user_id,
+                tier_id=basic_tier.id,
+                status="active",
+                start_date=datetime.utcnow(),
+                end_date=datetime.utcnow() + timedelta(days=365)  # 基础版1年
+            )
+            db.add(subscription)
+            db.commit()
 
         # 生成 JWT token
         access_token = create_access_token(data={"sub": user.user_id, "username": user.username})
@@ -160,7 +174,7 @@ async def register_user(request: UserRegisterRequest):
                 "nickname": user.nickname,
                 "email": user.email,
                 "created_at": user.created_at.isoformat(),
-                "free_token_granted": FREE_TOKEN_GRANT
+                "free_token_granted": free_token_amount
             }
         }
     except HTTPException:
@@ -725,7 +739,7 @@ class SetupAgentRequest(BaseModel):
 async def setup_agent(request: SetupAgentRequest):
     """创建或配置 Agent"""
     db = SessionLocal()
-    new_agent = AgentConfig(name=request.name, agent_type=request.agent_type, prompt=request.prompt)
+    new_agent = Agent(name=request.name, agent_type=request.agent_type, prompt=request.prompt)
     db.add(new_agent)
     db.commit()
     db.close()
@@ -1011,7 +1025,7 @@ async def get_subscription(user_id: str, user: User = Depends(get_current_user))
 
 @app.post("/subscription/upgrade")
 async def upgrade_subscription(user_id: str, tier_code: str, user: User = Depends(get_current_user)):
-    """升级订阅（模拟支付）"""
+    """升级订阅（模拟支付）- 升级时赠送新等级1个月配额"""
     if user_id != user.user_id:
         raise HTTPException(status_code=403, detail="无权限操作")
     if tier_code not in TIER_CONFIGS:
@@ -1031,9 +1045,19 @@ async def upgrade_subscription(user_id: str, tier_code: str, user: User = Depend
             Subscription.status == "active"
         ).first()
 
+        # 判断是升级还是降级
+        current_tier_code = None
+        if existing:
+            current_tier = db.query(UserTier).filter(UserTier.id == existing.tier_id).first()
+            current_tier_code = current_tier.tier_code if current_tier else None
+
+        grant_tokens = 0
         if existing:
             existing.tier_id = tier.id
             existing.updated_at = datetime.utcnow()
+            # 升级：赠送新等级1个月配额
+            if current_tier_code == "basic" and tier_code == "pro":
+                grant_tokens = tier_config["monthly_token_quota"]  # 500万
         else:
             subscription = Subscription(
                 user_id=user_id,
@@ -1043,15 +1067,37 @@ async def upgrade_subscription(user_id: str, tier_code: str, user: User = Depend
                 end_date=datetime.utcnow() + timedelta(days=30)
             )
             db.add(subscription)
+            # 新订阅默认基础版，没有升级不赠送
+
+        # 升级赠送token
+        token_granted = 0
+        if grant_tokens > 0:
+            account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+            if not account:
+                account = TokenAccount(user_id=user_id, balance=0)
+                db.add(account)
+            account.balance += grant_tokens
+            account.total_granted += grant_tokens
+            transaction = TokenTransaction(
+                user_id=user_id,
+                transaction_type="grant",
+                amount=grant_tokens,
+                balance_after=account.balance,
+                description=f"升级到{tier.tier_name}赠送 {grant_tokens} Token"
+            )
+            db.add(transaction)
+            token_granted = grant_tokens
 
         db.commit()
+
         return {
             "status": "success",
             "message": f"已升级到{tier.tier_name}",
             "data": {
                 "tier": tier_code,
                 "tier_name": tier.tier_name,
-                "end_date": (datetime.utcnow() + timedelta(days=30)).isoformat()
+                "end_date": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+                "token_granted": token_granted
             }
         }
     except HTTPException:
@@ -1850,135 +1896,6 @@ async def admin_delete_tier(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-
-# ==================== 政策文档管理接口 ====================
-
-@app.get("/admin/policy-documents")
-async def admin_list_policies(
-    page: int = 1,
-    page_size: int = 20,
-    category: Optional[str] = None,
-    admin: AdminUser = Depends(get_current_admin_user)
-):
-    """获取政策文档列表"""
-    db = SessionLocal()
-    try:
-        query = db.query(PolicyDocument)
-        if category:
-            query = query.filter(PolicyDocument.category == category)
-
-        total = query.count()
-        docs = query.order_by(PolicyDocument.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-
-        return {
-            "status": "success",
-            "data": {
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "documents": [{
-                    "id": d.id,
-                    "title": d.title,
-                    "category": d.category,
-                    "document_type": d.document_type,
-                    "source_url": d.source_url,
-                    "is_active": d.is_active,
-                    "effective_date": d.effective_date.isoformat() if d.effective_date else None,
-                    "created_at": d.created_at.isoformat()
-                } for d in docs]
-            }
-        }
-    finally:
-        db.close()
-
-
-@app.post("/admin/policy-documents")
-async def admin_create_policy(
-    title: str,
-    category: str,
-    document_type: str = "national",
-    content: Optional[str] = None,
-    source_url: Optional[str] = None,
-    effective_date: Optional[datetime] = None,
-    admin: AdminUser = Depends(get_current_admin_user)
-):
-    """创建政策文档"""
-    db = SessionLocal()
-    try:
-        doc = PolicyDocument(
-            title=title,
-            category=category,
-            document_type=document_type,
-            content=content or "",
-            source_url=source_url,
-            effective_date=effective_date,
-            created_by=admin.username
-        )
-        db.add(doc)
-        db.commit()
-
-        return {
-            "status": "success",
-            "message": "文档创建成功",
-            "data": {"id": doc.id}
-        }
-    finally:
-        db.close()
-
-
-@app.put("/admin/policy-documents/{doc_id}")
-async def admin_update_policy(
-    doc_id: int,
-    title: Optional[str] = None,
-    category: Optional[str] = None,
-    content: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    admin: AdminUser = Depends(get_current_admin_user)
-):
-    """更新政策文档"""
-    db = SessionLocal()
-    try:
-        doc = db.query(PolicyDocument).filter(PolicyDocument.id == doc_id).first()
-        if not doc:
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        if title is not None:
-            doc.title = title
-        if category is not None:
-            doc.category = category
-        if content is not None:
-            doc.content = content
-        if is_active is not None:
-            doc.is_active = is_active
-
-        doc.updated_at = datetime.utcnow()
-        db.commit()
-
-        return {"status": "success", "message": "文档更新成功"}
-    finally:
-        db.close()
-
-
-@app.delete("/admin/policy-documents/{doc_id}")
-async def admin_delete_policy(
-    doc_id: int,
-    admin: AdminUser = Depends(get_current_admin_user)
-):
-    """删除政策文档（软删除）"""
-    db = SessionLocal()
-    try:
-        doc = db.query(PolicyDocument).filter(PolicyDocument.id == doc_id).first()
-        if not doc:
-            raise HTTPException(status_code=404, detail="文档不存在")
-
-        doc.is_active = False
-        doc.updated_at = datetime.utcnow()
-        db.commit()
-
-        return {"status": "success", "message": "文档已删除"}
     finally:
         db.close()
 

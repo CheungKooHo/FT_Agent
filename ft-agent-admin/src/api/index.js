@@ -74,25 +74,6 @@ const api = {
     return request.get('/admin/stats/conversation')
   },
 
-  // 政策文档
-  getPolicyDocuments: (page = 1, pageSize = 20, category = null) => {
-    const params = { page, page_size: pageSize }
-    if (category) params.category = category
-    return request.get('/admin/policy-documents', { params })
-  },
-
-  createPolicyDocument: (data) => {
-    return request.post('/admin/policy-documents', null, { params: data })
-  },
-
-  updatePolicyDocument: (docId, data) => {
-    return request.put(`/admin/policy-documents/${docId}`, null, { params: data })
-  },
-
-  deletePolicyDocument: (docId) => {
-    return request.delete(`/admin/policy-documents/${docId}`)
-  },
-
   // 系统配置
   getSystemConfigs: () => {
     return request.get('/admin/system-configs')

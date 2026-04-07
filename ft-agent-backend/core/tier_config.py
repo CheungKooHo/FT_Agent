@@ -58,7 +58,7 @@ TIER_CONFIGS = {
         "description": "财税政策知识问答",
         "system_prompt": TIER1_SYSTEM_PROMPT,
         "features": ["policy_qa"],
-        "monthly_token_quota": 1000,  # 每月免费 token
+        "monthly_token_quota": 1000000,  # 每月免费 token
         "token_per_message": 50,  # 每条消息估算消耗
         "price_monthly": 0,  # 免费
         "agent_type": "tax_basic",  # 关联的 Agent
@@ -68,7 +68,7 @@ TIER_CONFIGS = {
         "description": "专业财税分析与解决方案",
         "system_prompt": TIER2_SYSTEM_PROMPT,
         "features": ["policy_qa", "analysis", "calculation", "advice"],
-        "monthly_token_quota": 5000,
+        "monthly_token_quota": 5000000,
         "token_per_message": 100,
         "price_monthly": 29900,  # 299元/月（分）
         "agent_type": "tax_pro",  # 关联的 Agent
@@ -77,7 +77,6 @@ TIER_CONFIGS = {
 
 # 默认配置
 DEFAULT_TIER = "basic"
-FREE_TOKEN_GRANT = 1000  # 新用户注册赠送 Token
 
 # Token 价格配置
 TOKEN_PRICE_PER_MILLION = 500  # 每百万 Token 5元（单位：分）

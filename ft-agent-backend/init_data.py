@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, '.')
 
 from core.database import SessionLocal, UserTier, AdminUser, SystemConfig, Agent
-from core.tier_config import TIER_CONFIGS, FREE_TOKEN_GRANT, TOKEN_PRICE_PER_MILLION
+from core.tier_config import TIER_CONFIGS, TOKEN_PRICE_PER_MILLION
 
 
 def init_agents():
@@ -93,7 +93,7 @@ def init_system_configs():
     db = SessionLocal()
     try:
         configs = {
-            "FREE_TOKEN_GRANT": str(FREE_TOKEN_GRANT),
+            "FREE_TOKEN_GRANT": str(TIER_CONFIGS["basic"]["monthly_token_quota"]),
             "TOKEN_PRICE_PER_MILLION": str(TOKEN_PRICE_PER_MILLION),
             "SYSTEM_NAME": "财税 Agent 平台",
             "VERSION": "1.0.0"

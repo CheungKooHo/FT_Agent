@@ -24,11 +24,6 @@ const routes = [
         component: () => import('@/views/Users.vue')
       },
       {
-        path: 'policies',
-        name: 'Policies',
-        component: () => import('@/views/Policies.vue')
-      },
-      {
         path: 'tokens',
         name: 'Tokens',
         component: () => import('@/views/Tokens.vue')

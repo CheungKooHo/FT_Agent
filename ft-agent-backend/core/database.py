@@ -71,8 +71,6 @@ class Agent(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-# 保留 AgentConfig 作为别名（兼容旧代码）
-AgentConfig = Agent
 
 # 定义对话历史表
 class ConversationHistory(Base):
@@ -177,33 +175,6 @@ class Subscription(Base):
 
     __table_args__ = (
         Index('idx_sub_user_status', 'user_id', 'status'),
-    )
-
-
-# 政策文档表
-class PolicyDocument(Base):
-    __tablename__ = "policy_documents"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String)
-    document_type = Column(String)  # "national", "provincial", "local", "industry"
-    category = Column(String)  # "tax", "finance", "audit"
-    content = Column(Text)
-    file_path = Column(String, nullable=True)
-    file_type = Column(String, nullable=True)  # "pdf", "txt", "docx"
-    source_url = Column(String, nullable=True)
-    effective_date = Column(DateTime, nullable=True)
-    expiry_date = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
-    version = Column(Integer, default=1)
-    metadata_json = Column(Text, nullable=True)
-    created_by = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    __table_args__ = (
-        Index('idx_policy_category', 'category'),
-        Index('idx_policy_active', 'is_active'),
     )
 
 
