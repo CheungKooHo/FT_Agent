@@ -234,19 +234,47 @@
     </el-dialog>
 
     <!-- 预览对话框 -->
-    <el-dialog v-model="previewDialogVisible" title="文档内容预览" width="80%" max-width="900px" destroy-on-close>
-      <div v-if="previewLoading" style="text-align: center; padding: 40px;">
-        <el-icon class="is-loading" :size="30"><Loading /></el-icon>
+    <el-dialog
+      v-model="previewDialogVisible"
+      title="文档内容预览"
+      width="90%"
+      max-width="1000px"
+      destroy-on-close
+      class="preview-dialog"
+    >
+      <template #header>
+        <div class="preview-header">
+          <span class="preview-title">文档内容预览</span>
+          <el-tag v-if="previewFileName" type="info" size="small">{{ previewFileName }}</el-tag>
+        </div>
+      </template>
+
+      <div v-if="previewLoading" class="preview-loading">
+        <el-icon class="is-loading" :size="40"><Loading /></el-icon>
         <p>加载中...</p>
       </div>
-      <div v-else-if="previewChunks.length === 0" style="text-align: center; padding: 40px; color: #909399;">
-        暂无索引内容
+      <div v-else-if="previewChunks.length === 0" class="preview-empty">
+        <el-icon :size="50" color="#c0c4cc"><Document /></el-icon>
+        <p>暂无索引内容</p>
       </div>
       <div v-else class="chunks-container">
+        <div class="chunks-toolbar">
+          <span class="chunks-count">共 {{ previewChunks.length }} 个切片</span>
+        </div>
         <div class="chunk-item" v-for="(chunk, index) in previewChunks" :key="index">
           <div class="chunk-header">
             <span class="chunk-index">#{{ chunk.chunk_index + 1 }}</span>
-            <span class="chunk-source">{{ chunk.source }}</span>
+            <span class="chunk-source" :title="chunk.source">{{ getFileName(chunk.source) }}</span>
+            <el-button
+              size="small"
+              type="primary"
+              link
+              class="copy-btn"
+              @click="copyChunk(chunk.content)"
+            >
+              <el-icon><CopyDocument /></el-icon>
+              复制
+            </el-button>
           </div>
           <div class="chunk-content">{{ chunk.content }}</div>
         </div>
@@ -265,7 +293,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
-import { Plus, Loading, Download, Upload } from '@element-plus/icons-vue'
+import { Plus, Loading, Download, Upload, CopyDocument, Document } from '@element-plus/icons-vue'
 
 // RAG 测试
 const testAgentType = ref('tax_basic')
@@ -337,6 +365,20 @@ const formatSize = (bytes) => {
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   return new Date(dateStr).toLocaleString('zh-CN')
+}
+
+const getFileName = (path) => {
+  if (!path) return ''
+  return path.split('/').pop() || path
+}
+
+const copyChunk = async (content) => {
+  try {
+    await navigator.clipboard.writeText(content)
+    ElMessage.success('已复制')
+  } catch {
+    ElMessage.error('复制失败')
+  }
 }
 
 const loadFiles = async () => {
@@ -543,15 +585,41 @@ onMounted(() => {
 }
 
 .chunks-container {
-  max-height: 500px;
+  max-height: 60vh;
   overflow-y: auto;
+  padding: 0 4px;
+}
+
+.chunks-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.chunks-count {
+  font-size: 13px;
+  color: #909399;
 }
 
 .chunk-item {
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 16px;
   margin-bottom: 16px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 12px;
+  transition: all 0.2s;
+}
+
+.chunk-item:hover {
+  border-color: #409eff;
+  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.1);
 }
 
 .chunk-item:last-child {
@@ -562,31 +630,39 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f5f7fa;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
 }
 
 .chunk-index {
-  background: #409eff;
+  background: linear-gradient(135deg, #409eff, #67c23a);
   color: #fff;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: bold;
 }
 
 .chunk-source {
+  flex: 1;
   color: #909399;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chunk-content {
-  color: #606266;
+  color: #404040;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.8;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
 }
 
 .preview-footer {
@@ -598,6 +674,48 @@ onMounted(() => {
 .chunk-count {
   color: #909399;
   font-size: 13px;
+}
+
+.preview-loading,
+.preview-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #909399;
+}
+
+.preview-loading p,
+.preview-empty p {
+  margin: 16px 0 0;
+  font-size: 14px;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+:deep(.preview-dialog .el-dialog__header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+:deep(.preview-dialog .el-dialog__body) {
+  padding: 20px;
+}
+
+.copy-btn {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.copy-btn:hover {
+  opacity: 1;
 }
 
 .rag-test {
