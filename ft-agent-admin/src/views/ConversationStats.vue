@@ -99,21 +99,7 @@
           <template #header>
             <span>Agent 类型分布</span>
           </template>
-          <div class="agent-dist" v-if="Object.keys(agentDistribution).length">
-            <div
-              v-for="(count, agent) in agentDistribution"
-              :key="agent"
-              class="agent-item"
-            >
-              <span class="agent-name">{{ agent }}</span>
-              <span class="agent-count">{{ count }} 条</span>
-              <el-progress
-                :percentage="getAgentPercent(count)"
-                :stroke-width="8"
-                :color="getAgentColor(agent)"
-              />
-            </div>
-          </div>
+          <div class="chart-container" ref="agentChartRef" v-if="Object.keys(agentDistribution).length"></div>
           <div v-else class="empty">暂无数据</div>
         </el-card>
       </el-col>
@@ -148,8 +134,10 @@ const loading = ref(false)
 
 let messageChart = null
 let tokenChart = null
+let agentChart = null
 const messageChartRef = ref(null)
 const tokenChartRef = ref(null)
+const agentChartRef = ref(null)
 
 const formatNumber = (num) => {
   if (!num && num !== 0) return '0'
@@ -208,12 +196,29 @@ const initCharts = async () => {
     tokenChart = echarts.init(tokenChartRef.value)
     tokenChart.setOption(getChartOption(dailyTokenTrend.value, 'Token', '#f56c6c'))
   }
+  if (agentChartRef.value) {
+    agentChart = echarts.init(agentChartRef.value)
+    const data = Object.entries(agentDistribution.value).map(([name, value]) => ({ name, value }))
+    agentChart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      legend: { bottom: 0, textStyle: { fontSize: 12 } },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        avoidLabelOverlap: true,
+        itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+        label: { show: true, formatter: '{b}\n{d}%', fontSize: 12 },
+        data
+      }]
+    })
+  }
   window.addEventListener('resize', handleResize)
 }
 
 const handleResize = () => {
   messageChart?.resize()
   tokenChart?.resize()
+  agentChart?.resize()
 }
 
 const loadStats = async () => {
@@ -244,6 +249,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   messageChart?.dispose()
   tokenChart?.dispose()
+  agentChart?.dispose()
 })
 </script>
 
@@ -304,6 +310,31 @@ onUnmounted(() => {
 
 .chart-container {
   height: 250px;
+}
+
+.agent-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-name {
+  width: 80px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.agent-count {
+  width: 70px;
+  font-size: 13px;
+  color: #909399;
+  text-align: right;
 }
 
 .agent-dist {
