@@ -63,8 +63,20 @@
           <template #header>
             <span>各版本 Token 分布</span>
           </template>
-          <div class="chart-container" ref="tierChartRef" v-if="tierStatsData.length"></div>
-          <div v-else class="empty">暂无数据</div>
+          <el-table :data="tierStatsData" stripe size="small">
+            <el-table-column prop="tier_name" label="版本" />
+            <el-table-column prop="count" label="用户数" align="center" />
+            <el-table-column prop="balance" label="剩余 Token" align="right">
+              <template #default="{ row }">
+                {{ formatNumber(row.balance) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="consumed" label="已消耗" align="right">
+              <template #default="{ row }">
+                {{ formatNumber(row.consumed) }}
+              </template>
+            </el-table-column>
+          </el-table>
         </el-card>
       </el-col>
       <el-col :span="12">
@@ -198,8 +210,6 @@ const topConsumers = ref([])
 const recentTransactions = ref([])
 const tierStatsData = ref([])
 const loading = ref(false)
-const tierChartRef = ref(null)
-let tierChart = null
 
 const formatNumber = (num) => {
   if (!num) return '0'
@@ -255,35 +265,12 @@ const loadStats = async () => {
         tier_name: name,
         ...data
       }))
-      await initTierChart()
     }
   } catch (error) {
     ElMessage.error('加载统计数据失败')
   } finally {
     loading.value = false
   }
-}
-
-const initTierChart = async () => {
-  if (!tierChartRef.value) return
-  const echarts = await import('echarts')
-  tierChart = echarts.init(tierChartRef.value)
-  const data = tierStatsData.value.map(item => ({
-    name: item.tier_name,
-    value: item.balance
-  }))
-  tierChart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { fontSize: 12 } },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
-      label: { show: true, formatter: '{b}\n{d}%', fontSize: 12 },
-      data
-    }]
-  })
 }
 
 onMounted(() => {
@@ -411,15 +398,5 @@ onMounted(() => {
 
 .amount.negative {
   color: #f56c6c;
-}
-
-.chart-container {
-  height: 250px;
-}
-
-.empty {
-  text-align: center;
-  color: #909399;
-  padding: 60px 0;
 }
 </style>
