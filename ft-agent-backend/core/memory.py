@@ -45,7 +45,8 @@ class MemoryManager:
             agent_type=agent_type,
             role=role,
             content=content,
-            references=json.dumps(references) if references else None
+            references=json.dumps(references) if references else None,
+            created_at=datetime.utcnow()
         )
         self.db.add(message)
         self.db.commit()
