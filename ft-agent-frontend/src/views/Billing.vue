@@ -104,13 +104,40 @@
         <div class="payment-info">
           <p class="payment-title">{{ paymentType === 'recharge' ? 'Token 充值' : '订阅升级' }}</p>
           <p class="payment-amount">
-            <span v-if="paymentType === 'recharge'">{{ rechargeAmount }} Token</span>
+            <span v-if="paymentType === 'recharge'">{{ rechargeAmount.toLocaleString() }} Token</span>
             <span v-else>{{ upgradeTier?.tier_name }}</span>
           </p>
           <p v-if="paymentType === 'recharge'" class="payment-price">
             约 ¥{{ ((rechargeAmount / 1000000) * (billingStore.tokenPrice?.price_yuan || 5)).toFixed(2) }}
           </p>
         </div>
+
+        <!-- 充值选项 -->
+        <div v-if="paymentType === 'recharge'" class="recharge-options">
+          <div class="options-label">选择充值数量</div>
+          <div class="options-buttons">
+            <el-button
+              v-for="opt in rechargeOptions"
+              :key="opt.value"
+              :type="rechargeAmount === opt.value ? 'primary' : 'default'"
+              @click="rechargeAmount = opt.value"
+            >
+              {{ opt.label }} Token
+            </el-button>
+          </div>
+          <div class="custom-input">
+            <span class="custom-label">自定义：</span>
+            <el-input-number
+              v-model="rechargeAmount"
+              :min="1"
+              :step="100"
+              controls-position="right"
+              style="width: 150px"
+            />
+            <span class="custom-unit">Token</span>
+          </div>
+        </div>
+
         <el-form label-width="80px">
           <el-form-item label="支付方式">
             <el-radio-group v-model="paymentMethod">
@@ -173,6 +200,15 @@ const paymentType = ref('recharge')
 const paymentMethod = ref('alipay')
 const rechargeAmount = ref(100)
 const upgradeTier = ref(null)
+
+// 预设充值选项（Token 数量）
+const rechargeOptions = [
+  { label: '100', value: 100 },
+  { label: '500', value: 500 },
+  { label: '1,000', value: 1000 },
+  { label: '2,000', value: 2000 },
+  { label: '5,000', value: 5000 }
+]
 
 const openRechargeDialog = () => {
   paymentType.value = 'recharge'
@@ -536,5 +572,45 @@ onMounted(async () => {
   .section {
     padding: 20px;
   }
+}
+
+.recharge-options {
+  margin-bottom: 16px;
+}
+
+.options-label {
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 10px;
+}
+
+.options-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.options-buttons .el-button {
+  flex: 1;
+  min-width: 80px;
+}
+
+.custom-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.custom-label {
+  font-size: 13px;
+  color: #909399;
+  white-space: nowrap;
+}
+
+.custom-unit {
+  font-size: 13px;
+  color: #909399;
 }
 </style>
