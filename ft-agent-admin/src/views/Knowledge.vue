@@ -143,6 +143,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="chunk_count" label="切片数" width="80" />
+        <el-table-column prop="引用次数" label="引用次数" width="80">
+          <template #default="{ row }">
+            {{ row.引用次数 || 1 }}
+          </template>
+        </el-table-column>
         <el-table-column prop="is_indexed" label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="row.is_indexed ? 'success' : 'warning'" size="small">

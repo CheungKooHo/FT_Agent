@@ -2030,20 +2030,79 @@ async def admin_list_knowledge_files(
     agent_type: Optional[str] = None,
     admin: AdminUser = Depends(get_current_admin_user)
 ):
-    """获取所有用户的知识库文件列表"""
+    """获取所有用户的知识库文件列表（去重，同一个 doc_id 只显示一条）"""
     db = SessionLocal()
     try:
-        query = db.query(KnowledgeFile)
-        if agent_type:
-            query = query.filter(KnowledgeFile.agent_type == agent_type)
-
-        total = query.count()
-        files = query.order_by(KnowledgeFile.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
-
-        # 获取用户信息
         from core.database import User
-        user_ids = list(set(f.user_id for f in files))
-        users = {u.user_id: u.username for u in db.query(User).filter(User.user_id.in_(user_ids)).all()}
+        from sqlalchemy import func
+
+        # 子查询：按 doc_id 和 agent_type 分组，取第一条记录的字段
+        subquery = db.query(
+            KnowledgeFile.doc_id,
+            KnowledgeFile.agent_type,
+            func.max(KnowledgeFile.id).label("id"),
+            func.max(KnowledgeFile.original_filename).label("original_filename"),
+            func.max(KnowledgeFile.filename).label("filename"),
+            func.max(KnowledgeFile.file_size).label("file_size"),
+            func.max(KnowledgeFile.file_type).label("file_type"),
+            func.max(KnowledgeFile.chunk_count).label("chunk_count"),
+            func.max(KnowledgeFile.is_indexed).label("is_indexed"),
+            func.max(KnowledgeFile.created_at).label("created_at"),
+            func.count(KnowledgeFile.user_id).label("引用次数")
+        )
+
+        if agent_type:
+            subquery = subquery.filter(KnowledgeFile.agent_type == agent_type)
+
+        subquery = subquery.group_by(
+            KnowledgeFile.doc_id,
+            KnowledgeFile.agent_type
+        ).subquery()
+
+        # 统计去重后的总数
+        total = db.query(func.count()).select_from(subquery).scalar()
+
+        # 分页
+        offset = (page - 1) * page_size
+        files = db.query(subquery).order_by(subquery.c.created_at.desc()).offset(offset).limit(page_size).all()
+
+        # 获取上传者信息（取 doc_id 对应的 admin 用户）
+        # 如果有 admin 上传的文件，user_id 为 admin；否则取第一个保存引用的用户
+        result_files = []
+        for f in files:
+            # 查找这个 doc_id 的原始上传者
+            original = db.query(KnowledgeFile).filter(
+                KnowledgeFile.doc_id == f.doc_id,
+                KnowledgeFile.agent_type == f.agent_type,
+                KnowledgeFile.user_id == 'admin'
+            ).first()
+
+            if original:
+                uploader = "平台"
+                user_id = "admin"
+            else:
+                first_user = db.query(KnowledgeFile).filter(
+                    KnowledgeFile.doc_id == f.doc_id,
+                    KnowledgeFile.agent_type == f.agent_type
+                ).first()
+                uploader = first_user.user_id if first_user else "未知"
+                user_id = first_user.user_id if first_user else "未知"
+
+            result_files.append({
+                "id": f.id,
+                "user_id": user_id,
+                "username": uploader,
+                "filename": f.filename,
+                "original_filename": f.original_filename,
+                "file_size": f.file_size,
+                "file_type": f.file_type,
+                "agent_type": f.agent_type,
+                "doc_id": f.doc_id,
+                "chunk_count": f.chunk_count,
+                "is_indexed": f.is_indexed,
+                "引用次数": f.引用次数,
+                "created_at": f.created_at.isoformat() if f.created_at else None
+            })
 
         return {
             "status": "success",
@@ -2051,20 +2110,7 @@ async def admin_list_knowledge_files(
                 "total": total,
                 "page": page,
                 "page_size": page_size,
-                "files": [{
-                    "id": f.id,
-                    "user_id": f.user_id,
-                    "username": users.get(f.user_id, "未知"),
-                    "filename": f.filename,
-                    "original_filename": f.original_filename,
-                    "file_size": f.file_size,
-                    "file_type": f.file_type,
-                    "agent_type": f.agent_type,
-                    "doc_id": f.doc_id,
-                    "chunk_count": f.chunk_count,
-                    "is_indexed": f.is_indexed,
-                    "created_at": f.created_at.isoformat()
-                } for f in files]
+                "files": result_files
             }
         }
     finally:
