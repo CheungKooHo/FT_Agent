@@ -104,37 +104,37 @@
         <div class="payment-info">
           <p class="payment-title">{{ paymentType === 'recharge' ? 'Token 充值' : '订阅升级' }}</p>
           <p class="payment-amount">
-            <span v-if="paymentType === 'recharge'">{{ rechargeAmount.toLocaleString() }} Token</span>
+            <span v-if="paymentType === 'recharge'">¥{{ rechargeMoney }}</span>
             <span v-else>{{ upgradeTier?.tier_name }}</span>
           </p>
           <p v-if="paymentType === 'recharge'" class="payment-price">
-            约 ¥{{ ((rechargeAmount / 1000000) * (billingStore.tokenPrice?.price_yuan || 5)).toFixed(2) }}
+            约 {{ rechargeTokenAmount.toLocaleString() }} Token
           </p>
         </div>
 
-        <!-- 充值选项 -->
+        <!-- 充值选项（按金额） -->
         <div v-if="paymentType === 'recharge'" class="recharge-options">
-          <div class="options-label">选择充值数量</div>
+          <div class="options-label">选择充值金额</div>
           <div class="options-buttons">
             <el-button
               v-for="opt in rechargeOptions"
               :key="opt.value"
-              :type="rechargeAmount === opt.value ? 'primary' : 'default'"
-              @click="rechargeAmount = opt.value"
+              :type="rechargeMoney === opt.value ? 'primary' : 'default'"
+              @click="rechargeMoney = opt.value"
             >
-              {{ opt.label }} Token
+              ¥{{ opt.label }}
             </el-button>
           </div>
           <div class="custom-input">
-            <span class="custom-label">自定义：</span>
+            <span class="custom-label">自定义金额：</span>
             <el-input-number
-              v-model="rechargeAmount"
+              v-model="rechargeMoney"
               :min="1"
-              :step="100"
+              :step="10"
               controls-position="right"
               style="width: 150px"
             />
-            <span class="custom-unit">Token</span>
+            <span class="custom-unit">元</span>
           </div>
         </div>
 
@@ -161,7 +161,7 @@
       <div v-else-if="paymentStep === 'success'" class="payment-status">
         <el-icon :size="60" color="#67c23a"><CircleCheck /></el-icon>
         <p class="status-text success">{{ paymentType === 'recharge' ? '充值成功' : '升级成功' }}！</p>
-        <p class="status-hint">{{ paymentType === 'recharge' ? `已获得 ${rechargeAmount} Token` : `已升级到 ${upgradeTier?.tier_name}` }}</p>
+        <p class="status-hint">{{ paymentType === 'recharge' ? `已获得 ${rechargeTokenAmount.toLocaleString()} Token` : `已升级到 ${upgradeTier?.tier_name}` }}</p>
       </div>
 
       <div v-else-if="paymentStep === 'failed'" class="payment-status">
@@ -188,7 +188,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useBillingStore } from '@/stores/billing'
 
@@ -198,22 +198,28 @@ const showPaymentDialog = ref(false)
 const paymentStep = ref('form')
 const paymentType = ref('recharge')
 const paymentMethod = ref('alipay')
-const rechargeAmount = ref(100)
+const rechargeMoney = ref(10)
 const upgradeTier = ref(null)
 
-// 预设充值选项（Token 数量）
+// 预设充值选项（金额：元）
 const rechargeOptions = [
+  { label: '10', value: 10 },
+  { label: '50', value: 50 },
   { label: '100', value: 100 },
-  { label: '500', value: 500 },
-  { label: '1,000', value: 1000 },
-  { label: '2,000', value: 2000 },
-  { label: '5,000', value: 5000 }
+  { label: '200', value: 200 },
+  { label: '500', value: 500 }
 ]
+
+// 根据金额计算 Token 数量
+const rechargeTokenAmount = computed(() => {
+  const pricePerMillion = billingStore.tokenPrice?.price_yuan || 5
+  return Math.round((rechargeMoney.value / pricePerMillion) * 1000000)
+})
 
 const openRechargeDialog = () => {
   paymentType.value = 'recharge'
   paymentStep.value = 'form'
-  rechargeAmount.value = 100
+  rechargeMoney.value = 10
   showPaymentDialog.value = true
 }
 
@@ -232,12 +238,14 @@ const simulatePayment = async () => {
   if (isSuccess) {
     paymentStep.value = 'success'
     if (paymentType.value === 'recharge') {
-      await billingStore.rechargeToken(rechargeAmount.value)
+      console.log('充值Token数量:', rechargeTokenAmount.value, '金额:', rechargeMoney.value)
+      await billingStore.rechargeToken(rechargeTokenAmount.value)
     } else {
       await billingStore.upgradeSubscription(upgradeTier.value.tier_code)
     }
     await billingStore.fetchTokenBalance()
     await billingStore.fetchSubscription()
+    await billingStore.fetchTransactions()
   } else {
     paymentStep.value = 'failed'
   }
