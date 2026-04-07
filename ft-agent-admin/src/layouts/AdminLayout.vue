@@ -42,6 +42,10 @@
           <el-icon><Collection /></el-icon>
           <span>知识库</span>
         </el-menu-item>
+        <el-menu-item index="/system-config">
+          <el-icon><Tools /></el-icon>
+          <span>系统配置</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -65,7 +69,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection, ChatDotRound } from '@element-plus/icons-vue'
+import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection, ChatDotRound, Tools } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

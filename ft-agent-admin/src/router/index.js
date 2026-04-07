@@ -52,6 +52,11 @@ const routes = [
         path: 'knowledge',
         name: 'Knowledge',
         component: () => import('@/views/Knowledge.vue')
+      },
+      {
+        path: 'system-config',
+        name: 'SystemConfig',
+        component: () => import('@/views/SystemConfig.vue')
       }
     ]
   }
