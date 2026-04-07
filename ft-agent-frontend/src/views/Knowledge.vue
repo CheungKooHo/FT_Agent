@@ -306,24 +306,19 @@ const handleTestSearch = async () => {
 const previewChunks = async (file) => {
   selectedFile.value = file
   previewDialogVisible.value = true
+  previewChunksList.value = []
 
-  // 简单模拟：实际应该从后端获取该文档的切片
-  // 这里用搜索结果代替
-  if (file.is_indexed) {
-    try {
-      const response = await api.searchKnowledgePreview(
-        file.original_filename,
-        file.agent_type || 'tax_basic',
-        file.chunk_count || 3
-      )
-      if (response.status === 'success') {
-        previewChunksList.value = response.chunks || []
-      }
-    } catch {
-      previewChunksList.value = []
+  if (!file.is_indexed) {
+    return
+  }
+
+  try {
+    const response = await api.getKnowledgeFileChunks(file.filename)
+    if (response.status === 'success') {
+      previewChunksList.value = response.chunks || []
     }
-  } else {
-    previewChunksList.value = []
+  } catch (error) {
+    console.error('预览失败:', error)
   }
 }
 

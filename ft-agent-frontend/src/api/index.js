@@ -118,6 +118,10 @@ const api = {
     return request.delete(`/knowledge/files/${filename}`)
   },
 
+  getKnowledgeFileChunks: (filename) => {
+    return request.get(`/knowledge/files/${filename}/chunks`)
+  },
+
   searchKnowledgePreview: (query, agentType, topK = 5) => {
     return request.get('/knowledge/search_preview', { params: { query, agent_type: agentType, top_k: topK } })
   },

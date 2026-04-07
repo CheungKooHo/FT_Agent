@@ -538,6 +538,33 @@ async def delete_knowledge_file(
         db.close()
 
 
+@app.get("/knowledge/files/{filename}/chunks")
+async def get_knowledge_file_chunks(
+    filename: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    获取指定知识库文件的切片列表
+    """
+    db = SessionLocal()
+    try:
+        kf = db.query(KnowledgeFile).filter(
+            KnowledgeFile.filename == filename,
+            KnowledgeFile.user_id == user.user_id
+        ).first()
+
+        if not kf:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        if not kf.doc_id or not kf.agent_type:
+            return {"status": "success", "chunks": [], "total": 0, "message": "文件未索引"}
+
+        result = get_file_chunks(kf.agent_type, kf.doc_id)
+        return result
+    finally:
+        db.close()
+
+
 @app.post("/knowledge/save-reference")
 async def save_reference_document(
     doc_id: str,
