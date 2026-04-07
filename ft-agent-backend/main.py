@@ -1492,16 +1492,15 @@ async def admin_conversation_stats(admin: AdminUser = Depends(get_current_admin_
                 "tokens": total
             })
 
-        # 按 Agent 类型分布
+        # 按 Agent 类型分布（只统计已知的 agent 类型）
         agent_stats = {}
-        distinct_agents = db.query(ConversationHistory.agent_type).distinct().all()
-        for (agent_type,) in distinct_agents:
-            if agent_type is None:
-                continue
+        valid_agents = ['tax_basic', 'tax_pro']
+        for agent_type in valid_agents:
             count = db.query(ConversationHistory).filter(
                 ConversationHistory.agent_type == agent_type
             ).count()
-            agent_stats[agent_type] = count
+            if count > 0:
+                agent_stats[agent_type] = count
 
         # 今日/本周/本月统计
         today_messages = db.query(ConversationHistory).filter(
