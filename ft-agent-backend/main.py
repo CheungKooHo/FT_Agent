@@ -1494,11 +1494,14 @@ async def admin_conversation_stats(admin: AdminUser = Depends(get_current_admin_
 
         # 按 Agent 类型分布
         agent_stats = {}
-        for conv in db.query(ConversationHistory).distinct(ConversationHistory.agent_type).all():
+        distinct_agents = db.query(ConversationHistory.agent_type).distinct().all()
+        for (agent_type,) in distinct_agents:
+            if agent_type is None:
+                continue
             count = db.query(ConversationHistory).filter(
-                ConversationHistory.agent_type == conv.agent_type
+                ConversationHistory.agent_type == agent_type
             ).count()
-            agent_stats[conv.agent_type or "unknown"] = count
+            agent_stats[agent_type] = count
 
         # 今日/本周/本月统计
         today_messages = db.query(ConversationHistory).filter(
