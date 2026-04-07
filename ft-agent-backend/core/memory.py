@@ -81,7 +81,11 @@ class MemoryManager:
         import json
         result = []
         for msg in reversed(messages):
-            item = {"role": msg.role, "content": msg.content}
+            item = {
+                "role": msg.role,
+                "content": msg.content,
+                "time": msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else ""
+            }
             if msg.references:
                 try:
                     item["references"] = json.loads(msg.references)
