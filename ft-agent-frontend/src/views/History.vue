@@ -21,7 +21,7 @@
 
       <div v-else class="message-cards">
         <div
-          v-for="(item, index) in historyList"
+          v-for="(item, index) in reversedHistory"
           :key="index"
           class="message-card"
           :class="item.role"
@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import api from '@/api'
@@ -62,6 +62,9 @@ const userStore = useUserStore()
 const historyList = ref([])
 const limit = ref(50)
 const loading = ref(false)
+
+// 历史记录逆序显示（最新在前）
+const reversedHistory = computed(() => [...historyList.value].reverse())
 
 const copyContent = async (content) => {
   try {
