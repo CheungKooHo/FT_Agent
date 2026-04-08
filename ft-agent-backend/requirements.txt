@@ -1,45 +1,45 @@
 # Universal Agent Backend - Requirements
 
 # Web Framework
-fastapi==0.109.0
-uvicorn==0.27.0
-python-dotenv==1.0.0
-pydantic==2.5.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
 
 # Database
-sqlalchemy==2.0.25
-psycopg2-binary==2.9.9  # PostgreSQL driver
+sqlalchemy>=2.0.25
+psycopg2-binary>=2.9.9
 
 # AI & LLM
-langchain==0.1.6
-langchain-openai==0.0.5
-langchain-community==0.0.20
-openai==1.12.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+openai>=1.12.0
 
 # Document Processing
-pypdf==4.0.1
+pypdf>=4.0.1
 
 # Text Processing
-langchain-text-splitters==0.0.1
+langchain-text-splitters>=0.0.1
 
 # Vector Store
-qdrant-client==1.7.3
+qdrant-client>=1.7.3
 
 # Embeddings
-sentence-transformers==2.3.1
+sentence-transformers>=2.3.1
 
 # HTTP Client
-httpx==0.26.0
-requests==2.31.0
+httpx>=0.26.0
+requests>=2.31.0
 
 # Auth
-PyJWT==2.8.0
+PyJWT>=2.8.0
 
 # File Upload
-python-multipart==0.0.9
+python-multipart>=0.0.9
 
 # Token Counting
-tiktoken==0.5.2
+tiktoken>=0.5.0,<0.6.0
 
 # Scheduler
-apscheduler==3.10.4
+apscheduler>=3.10.4
