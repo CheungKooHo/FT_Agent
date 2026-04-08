@@ -39,7 +39,7 @@ PyJWT==2.8.0
 python-multipart==0.0.9
 
 # Token Counting
-tiktoken==0.7.0
+tiktoken==0.5.2
 
 # Scheduler
 apscheduler==3.10.4
