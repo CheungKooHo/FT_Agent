@@ -73,6 +73,20 @@ services:
     networks:
       - agent-network
 
+  # 管理后台
+  admin:
+    build:
+      context: ./ft-agent-admin
+      dockerfile: Dockerfile
+    container_name: agent-admin
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - agent-network
+
 networks:
   agent-network:
     driver: bridge
