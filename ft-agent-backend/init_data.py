@@ -93,7 +93,6 @@ def init_system_configs():
     db = SessionLocal()
     try:
         configs = {
-            "FREE_TOKEN_GRANT": str(TIER_CONFIGS["basic"]["monthly_token_quota"]),
             "TOKEN_PRICE_PER_MILLION": str(TOKEN_PRICE_PER_MILLION),
             "SYSTEM_NAME": "财税 Agent 平台",
             "VERSION": "1.0.0"

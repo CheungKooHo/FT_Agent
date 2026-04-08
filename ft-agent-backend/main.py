@@ -2315,5 +2315,10 @@ async def admin_import_knowledge(
 if __name__ == "__main__":
     import uvicorn
     from tasks.scheduler import start_scheduler
-    start_scheduler()
+    import threading
+
+    # 在后台线程启动调度器，避免阻塞主线程
+    scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
+    scheduler_thread.start()
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

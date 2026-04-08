@@ -8,11 +8,11 @@ import uuid
 import httpx
 from datetime import datetime
 from pathlib import Path
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # 定时任务实例
-scheduler = AsyncIOScheduler()
+scheduler = BlockingScheduler()
 
 # 政策来源配置
 POLICY_SOURCES = [
