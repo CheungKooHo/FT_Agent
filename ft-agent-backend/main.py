@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from dotenv import load_dotenv
 
 # 必须在最开始加载环境变量，确保 HF_ENDPOINT 等配置生效
