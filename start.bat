@@ -18,6 +18,21 @@ if not exist "ft-agent-backend" (
     exit /b 1
 )
 
+:: 检测 Python 3 路径 (Windows Python Launcher)
+set PYTHON_CMD=python
+where py >nul 2>&1
+if not errorlevel 1 (
+    set PYTHON_CMD=py
+)
+
+:: 测试 Python 版本
+for /f "tokens=*" %%v in ('%PYTHON_CMD% -c "import sys; print(sys.version_info.major)" 2^>nul') do set PYTHON_MAJOR=%%v
+if not "%PYTHON_MAJOR%"=="3" (
+    echo [警告] 检测到 Python %PYTHON_MAJOR%，建议使用 Python 3
+    echo 尝试使用 py -3 启动...
+    set PYTHON_CMD=py -3
+)
+
 :: 检查 Docker 是否运行
 echo 正在检查 Docker 状态...
 docker info >nul 2>&1
@@ -53,7 +68,7 @@ cd ft-agent-backend
 :: 检查虚拟环境
 if not exist "venv" (
     echo 虚拟环境不存在，正在创建...
-    python -m venv venv
+    %PYTHON_CMD% -m venv venv
 )
 
 :: 激活虚拟环境
@@ -68,7 +83,7 @@ if not exist "venv\installed" (
 
 :: 初始化数据库
 echo 初始化数据库...
-python init_data.py
+%PYTHON_CMD% init_data.py
 
 :: 终止可能占用 8000 端口的旧进程
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LISTENING"') do (
@@ -78,7 +93,7 @@ for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LI
 
 :: 后台启动后端
 echo 启动 FastAPI 服务...
-start /b cmd /c "python main.py >> backend.log 2>&1"
+start /b cmd /c "%PYTHON_CMD% main.py >> backend.log 2>&1"
 echo 正在等待后端启动...
 
 :: 等待后端启动 (最多 30 秒)
