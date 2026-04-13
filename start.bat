@@ -18,19 +18,23 @@ if not exist "ft-agent-backend" (
     exit /b 1
 )
 
-:: 检测 Python 3 路径 (Windows Python Launcher)
+:: 检测 Python 3 路径
 set PYTHON_CMD=python
-where py >nul 2>&1
-if not errorlevel 1 (
-    set PYTHON_CMD=py
+if exist "C:\Users\KooHo\AppData\Local\Python\bin\python3.exe" (
+    set PYTHON_CMD=C:\Users\KooHo\AppData\Local\Python\bin\python3.exe
+    echo [INFO] 使用 Python 3: %PYTHON_CMD%
+) else (
+    :: 尝试从 PATH 查找 Python 3
+    for /f "tokens=*" %%v in ('python3 -c "import sys; print(sys.executable)" 2^>nul') do set PYTHON_CMD=%%v
 )
 
 :: 测试 Python 版本
-for /f "tokens=*" %%v in ('%PYTHON_CMD% -c "import sys; print(sys.version_info.major)" 2^>nul') do set PYTHON_MAJOR=%%v
-if not "%PYTHON_MAJOR%"=="3" (
-    echo [警告] 检测到 Python %PYTHON_MAJOR%，建议使用 Python 3
-    echo 尝试使用 py -3 启动...
-    set PYTHON_CMD=py -3
+for /f "tokens=*" %%v in ('!PYTHON_CMD! -c "import sys; print(sys.version_info.major)" 2^>nul') do set PYTHON_MAJOR=%%v
+if not "!PYTHON_MAJOR!"=="3" (
+    echo [警告] 检测到 Python !PYTHON_MAJOR!，项目需要 Python 3
+    echo 请确保安装了 Python 3.8 或更高版本
+    pause
+    exit /b 1
 )
 
 :: 检查 Docker 是否运行
