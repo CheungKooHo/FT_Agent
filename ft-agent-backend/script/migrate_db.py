@@ -45,7 +45,7 @@ def migrate_database():
         print("\n请在 .env 文件中配置 PostgreSQL 连接信息")
         return False
 
-    print("✓ PostgreSQL 配置完整")
+    print("[OK] PostgreSQL 配置完整")
 
     # 2. 连接数据库
     print("\n[2/5] 连接数据库")
@@ -60,22 +60,22 @@ def migrate_database():
 
     try:
         if not os.path.exists("./sql_app.db"):
-            print("✓ SQLite 数据库不存在，将创建新的 PostgreSQL 数据库")
+            print("[OK] SQLite 数据库不存在，将创建新的 PostgreSQL 数据库")
             target_engine = create_engine(postgresql_url)
             from core.database import Base
             Base.metadata.create_all(bind=target_engine)
-            print("✓ PostgreSQL 表结构已创建")
+            print("[OK] PostgreSQL 表结构已创建")
             return True
 
         source_engine = create_engine(sqlite_url)
         SourceSession = sessionmaker(bind=source_engine)
         source_session = SourceSession()
-        print("✓ 已连接到 SQLite 数据库")
+        print("[OK] 已连接到 SQLite 数据库")
 
         target_engine = create_engine(postgresql_url)
         TargetSession = sessionmaker(bind=target_engine)
         target_session = TargetSession()
-        print("✓ 已连接到 PostgreSQL 数据库")
+        print("[OK] 已连接到 PostgreSQL 数据库")
     except Exception as e:
         print(f"\n连接失败: {str(e)}")
         return False
@@ -91,7 +91,7 @@ def migrate_database():
 
         # 在目标数据库创建所有表
         Base.metadata.create_all(bind=target_engine)
-        print("✓ PostgreSQL 表结构已创建")
+        print("[OK] PostgreSQL 表结构已创建")
 
         # 3. 迁移所有表
         print("\n[3/5] 迁移数据")
@@ -123,7 +123,7 @@ def migrate_database():
                 count += 1
             if count > 0:
                 target_session.commit()
-            print(f"  {table_name}: {count} 条" + (" ✓" if count > 0 else " (无数据)"))
+            print(f"  {table_name}: {count} 条" + (" [OK]" if count > 0 else " (无数据)"))
             total_migrated += count
 
         # 4. 验证

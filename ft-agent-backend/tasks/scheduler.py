@@ -185,7 +185,7 @@ def setup_scheduler():
         name="抓取财税政策",
         replace_existing=True
     )
-    print("✓ 定时任务已配置: 每天 08:00 抓取财税政策")
+    print("[OK] 定时任务已配置: 每天 08:00 抓取财税政策")
 
 
 def start_scheduler():
@@ -193,11 +193,11 @@ def start_scheduler():
     if not scheduler.running:
         setup_scheduler()
         scheduler.start()
-        print("✓ 定时任务调度器已启动")
+        print("[OK] 定时任务调度器已启动")
 
 
 def stop_scheduler():
     """停止定时任务调度器"""
     if scheduler.running:
         scheduler.shutdown()
-        print("✓ 定时任务调度器已停止")
+        print("[OK] 定时任务调度器已停止")

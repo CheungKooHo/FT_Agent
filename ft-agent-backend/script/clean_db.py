@@ -34,7 +34,7 @@ def clean_db():
             count = db.query(model).count()
             if count > 0:
                 db.query(model).delete()
-                print(f"  ✓ 已清空 {table_name} ({count} 条)")
+                print(f"  [OK] 已清空 {table_name} ({count} 条)")
 
         db.commit()
         print("\n数据库清理完成！")

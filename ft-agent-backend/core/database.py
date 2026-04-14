@@ -19,12 +19,12 @@ if DB_TYPE == "postgresql":
 
     SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_size=10, max_overflow=20)
-    print(f"✓ 使用 PostgreSQL 数据库: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    print(f"[OK] 使用 PostgreSQL 数据库: {DB_HOST}:{DB_PORT}/{DB_NAME}")
 else:
     # SQLite 配置（开发环境）
     SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-    print("✓ 使用 SQLite 数据库（开发模式）")
+    print("[OK] 使用 SQLite 数据库（开发模式）")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -257,8 +257,8 @@ def init_db():
             try:
                 conn.execute(text('ALTER TABLE conversation_history ADD COLUMN "references" TEXT'))
                 conn.commit()
-                print("✓ conversation_history.references 列已添加")
+                print("[OK] conversation_history.references 列已添加")
             except Exception:
                 pass  # 列已存在
 
-    print(f"✓ 数据库表初始化完成")
+    print(f"[OK] 数据库表初始化完成")

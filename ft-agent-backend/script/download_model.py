@@ -21,13 +21,13 @@ try:
     model = SentenceTransformer(model_name)
 
     print("-" * 50)
-    print("✓ 模型下载成功！")
+    print("[OK] 模型下载成功！")
     print(f"模型已缓存到: ~/.cache/huggingface/hub/")
     print("\n测试模型...")
 
     # 测试一下模型
     test_embedding = model.encode("测试文本")
-    print(f"✓ 模型测试成功！向量维度: {len(test_embedding)}")
+    print(f"[OK] 模型测试成功！向量维度: {len(test_embedding)}")
     print("\n现在可以启动服务了：python main.py")
 
 except Exception as e:
