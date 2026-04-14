@@ -89,14 +89,23 @@ if not exist "venv\installed" (
 echo 初始化数据库...
 %PYTHON_CMD% init_data.py
 
+:: 检查后端是否已在运行
+netstat -ano 2>nul | findstr ":8000" | findstr "LISTENING" >nul
+if not errorlevel 1 (
+    echo 后端服务已在运行，跳过启动步骤
+    goto :backend_skip_start
+)
+
 :: 终止可能占用 8000 端口的旧进程
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8000" ^| findstr "LISTENING"') do (
     echo 终止旧后端进程 %%a ...
-    taskkill /f /pid %%a >nul 2>&1
+    taskkill //f //pid %%a >nul 2>&1
 )
+ping -n 2 127.0.0.1 >nul 2>&1
 
 :: 后台启动后端
 echo 启动 FastAPI 服务...
+del backend.log 2>nul
 start /b cmd /c "%PYTHON_CMD% main.py >> backend.log 2>&1"
 echo 正在等待后端启动...
 
@@ -112,8 +121,6 @@ for /l %%i in (1,1,30) do (
 )
 
 :backend_ready
-cd ..
-
 if "!backend_started!"=="1" (
     echo 后端服务已就绪 (http://localhost:8000)
 ) else (
@@ -124,6 +131,9 @@ if "!backend_started!"=="1" (
     set /p choice=是否继续启动前端? (y/n):
     if not "!choice!"=="y" exit /b 1
 )
+
+:backend_skip_start
+cd ..
 
 :: 启动用户前端
 echo.
