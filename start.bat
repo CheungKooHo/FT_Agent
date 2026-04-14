@@ -92,6 +92,7 @@ echo 初始化数据库...
 :: 检查后端是否已在运行
 netstat -ano 2>nul | findstr ":8000" | findstr "LISTENING" >nul
 if not errorlevel 1 (
+    set backend_started=1
     echo 后端服务已在运行，跳过启动步骤
     goto :backend_skip_start
 )
