@@ -103,7 +103,7 @@ echo 正在等待后端启动...
 :: 等待后端启动 (最多 30 秒)
 set backend_started=0
 for /l %%i in (1,1,30) do (
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul 2>&1
     netstat -ano 2>nul | findstr ":8000" | findstr "LISTENING" >nul
     if not errorlevel 1 (
         set backend_started=1
@@ -148,7 +148,7 @@ echo 正在等待前端启动...
 :: 等待前端启动 (最多 30 秒)
 set frontend_started=0
 for /l %%i in (1,1,30) do (
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul 2>&1
     netstat -ano 2>nul | findstr ":3000" | findstr "LISTENING" >nul
     if not errorlevel 1 (
         set frontend_started=1
@@ -188,7 +188,7 @@ echo 正在等待管理后台启动...
 :: 等待管理后台启动 (最多 30 秒)
 set admin_started=0
 for /l %%i in (1,1,30) do (
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul 2>&1
     netstat -ano 2>nul | findstr ":3001" | findstr "LISTENING" >nul
     if not errorlevel 1 (
         set admin_started=1
