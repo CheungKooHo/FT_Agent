@@ -638,9 +638,9 @@ async def save_reference_document(
         return {
             "status": "success",
             "message": "文档已保存到知识库",
-            "filename": safe_filename,
-            "doc_id": result.get("doc_id"),
-            "chunks": result.get("chunks", 0)
+            "filename": source_file.original_filename,
+            "doc_id": doc_id,
+            "chunks": source_file.chunk_count
         }
     except HTTPException:
         raise
