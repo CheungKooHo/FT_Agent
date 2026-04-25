@@ -5,7 +5,7 @@ from core.database import SessionLocal, Agent, TokenAccount, TokenTransaction, S
 from core.rag_engine import search_knowledge, search_knowledge_preview
 from core.memory import MemoryManager
 from core.tier_config import TIER_CONFIGS, DEFAULT_TIER
-from typing import Optional
+from typing import Optional, Generator, AsyncGenerator
 
 
 def count_tokens(text: str, model: str = "cl100k_base") -> int:
@@ -391,3 +391,144 @@ def run_agent(
         }
     except Exception as e:
         return {"error": f"大模型调用失败: {str(e)}", "token_insufficient": False}
+
+
+def run_agent_stream(
+    user_input: str,
+    agent_type: str,
+    user_id: str,
+    session_id: Optional[str] = None,
+    use_memory: bool = True,
+    conversation_history_limit: int = 10
+) -> dict:
+    """
+    流式版本的 agent 运行函数，返回 (yield_func, context_info) 元组。
+    yield_func 用于流式生成响应，context_info 包含 references 等信息。
+    调用方负责：
+    1. 预扣 token
+    2. 调用 yield_func 收集流式响应
+    3. 计算实际 token 并调整
+    4. 保存对话到记忆系统
+    """
+    # --- 0. 获取用户 Tier 配置 ---
+    tier_config = get_user_tier_config(user_id)
+
+    # --- 2. 初始化记忆管理器 ---
+    memory_manager = None
+    conversation_history = []
+    user_memory_summary = ""
+
+    if use_memory:
+        memory_manager = MemoryManager(user_id=user_id, session_id=session_id)
+
+        # 获取对话历史
+        conversation_history = memory_manager.get_conversation_history(
+            agent_type=agent_type,
+            limit=conversation_history_limit
+        )
+
+        # 获取用户长期记忆摘要
+        user_memory_summary = memory_manager.get_memory_summary()
+
+    # --- 3. 检索知识库 (RAG) ---
+    context = ""
+    references = []
+    try:
+        rag_results = search_knowledge(user_input, agent_type)
+
+        # 获取结构化引用（用于前端展示）
+        preview_results = search_knowledge_preview(user_input, agent_type, top_k=5)
+        references = preview_results.get("chunks", []) if preview_results else []
+
+        context = rag_results if rag_results else "未找到相关政策背景知识。"
+    except Exception as e:
+        print(f"RAG 检索异常: {e}")
+        context = "政策知识库暂不可用。"
+
+    # --- 4. 构造增强 Prompt ---
+    db = SessionLocal()
+    try:
+        agent = db.query(Agent).filter(Agent.agent_type == agent_type, Agent.is_active == True).first()
+        system_prompt = agent.prompt if agent else tier_config.get("system_prompt", TIER_CONFIGS[DEFAULT_TIER]["system_prompt"])
+    finally:
+        db.close()
+
+    enhanced_prompt = f"""你是一个专业助手。以下是相关信息，请结合这些信息来回答用户的问题。
+
+【参考资料】:
+{context}
+
+【你的专业人设】:
+{system_prompt}
+"""
+
+    # 添加用户记忆（如果有）
+    if user_memory_summary and user_memory_summary != "暂无用户记忆":
+        enhanced_prompt += f"""
+
+【用户记忆】:
+{user_memory_summary}
+（请在回答时考虑用户的背景和偏好）
+"""
+
+    # 构建消息列表
+    messages = []
+    messages.append({"role": "system", "content": enhanced_prompt})
+
+    # 添加历史对话
+    for msg in conversation_history:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # 添加当前用户问题
+    messages.append({"role": "user", "content": user_input})
+
+    # --- 5. 计算输入 token 数 ---
+    input_tokens = count_messages_tokens(messages)
+
+    # --- 5.1 检查 Token 余额（预估输出）---
+    estimated_total = int(input_tokens * 2.2)
+    success, msg = check_token_balance(user_id, estimated_total)
+    if not success:
+        return {"error": msg, "token_insufficient": True, "input_tokens": input_tokens}
+
+    # 获取 agent 配置以确定模型
+    db = SessionLocal()
+    try:
+        config = db.query(Agent).filter(Agent.agent_type == agent_type).first()
+        model_name = config.model if config else "deepseek-chat"
+    finally:
+        db.close()
+
+    # 创建流式 LLM
+    llm = ChatOpenAI(
+        model=model_name,
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        openai_api_base=os.getenv("OPENAI_API_BASE"),
+        temperature=0.3,
+        streaming=True
+    )
+
+    def stream_yield():
+        """流式生成器，收集所有 chunk 并返回完整响应"""
+        full_response = ""
+        try:
+            for chunk in llm.stream(messages):
+                content = chunk.content
+                if content:
+                    full_response += content
+                    yield content
+        except Exception as e:
+            raise e
+        return full_response
+
+    return {
+        "stream_yield": stream_yield,
+        "input_tokens": input_tokens,
+        "estimated_total": estimated_total,
+        "tier_config": tier_config,
+        "references": references,
+        "memory_manager": memory_manager if use_memory else None,
+        "user_input": user_input,
+        "agent_type": agent_type,
+        "conversation_history": conversation_history
+    }

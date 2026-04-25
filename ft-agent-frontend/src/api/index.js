@@ -70,6 +70,105 @@ const api = {
     return request.post('/chat', data)
   },
 
+  // 流式对话
+  chatStream: (data, callbacks = {}) => {
+    const { onChunk, onFinish, onError } = callbacks
+    const token = localStorage.getItem('token')
+
+    // 代理被缓冲了，直接请求后端
+    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? 'http://localhost:8000/chat/stream'
+      : '/api/chat/stream'
+
+    return new Promise((resolve, reject) => {
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify(data)
+      }).then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        const read = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              if (buffer && onFinish) {
+                try {
+                  const lines = buffer.split('\n')
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      const jsonStr = line.slice(6)
+                      if (jsonStr.trim()) {
+                        const data = JSON.parse(jsonStr)
+                        if (data.type === 'finish' && onFinish) {
+                          onFinish(data)
+                        } else if (data.type === 'error' && onError) {
+                          onError(data.error)
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  // 忽略解析错误
+                }
+              }
+              resolve({ cancelled: false })
+              return
+            }
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop()
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const jsonStr = line.slice(6)
+                  if (jsonStr.trim()) {
+                    const data = JSON.parse(jsonStr)
+                    if (data.content && onChunk) {
+                      onChunk(data.content)
+                    } else if (data.type === 'finish' && onFinish) {
+                      onFinish(data)
+                    } else if (data.type === 'error' && onError) {
+                      onError(data.error)
+                    }
+                  }
+                } catch (e) {
+                  // 忽略解析错误
+                }
+              }
+            }
+
+            if (!done) {
+              read()
+            }
+          }).catch(error => {
+            if (onError) {
+              onError(error.message || '读取流失败')
+            }
+            reject(error)
+          })
+        }
+
+        read()
+      }).catch(error => {
+        if (onError) {
+          onError(error.message || '请求失败')
+        }
+        reject(error)
+      })
+    })
+  },
+
   // 记忆管理
   saveMemory: (data) => {
     return request.post('/memory', data)

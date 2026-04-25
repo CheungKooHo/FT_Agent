@@ -48,7 +48,13 @@
             <span class="time">{{ msg.time }}</span>
           </div>
           <div class="message-text" :class="{ 'user-text': msg.role === 'user' }">
-            <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" />
+            <template v-if="msg.role === 'assistant' && !msg.streaming">
+              <MarkdownContent :content="msg.content" />
+            </template>
+            <template v-else-if="msg.role === 'assistant' && msg.streaming">
+              <span v-if="msg.content">{{ msg.content }}<span class="typing-cursor-inline"></span></span>
+              <span v-else class="thinking-text">正在思考中<span class="thinking-dots"></span></span>
+            </template>
             <span v-else>{{ msg.content }}</span>
           </div>
 
@@ -89,7 +95,7 @@
         </div>
       </div>
 
-      <div v-if="isLoading" class="message-item assistant">
+      <div v-if="isLoading && !messages.some(m => m.streaming)" class="message-item assistant">
         <el-avatar :size="36" class="avatar" :style="{ background: '#409EFF' }">
           <el-icon><Robot /></el-icon>
         </el-avatar>
@@ -98,7 +104,7 @@
             <span class="sender">财税专家</span>
           </div>
           <div class="message-text loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
+            <span class="typing-cursor"></span>
             AI 思考中...
           </div>
         </div>
@@ -131,7 +137,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onActivated, watch } from 'vue'
+import { ref, reactive, nextTick, onMounted, onActivated, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useBillingStore } from '@/stores/billing'
@@ -249,46 +255,47 @@ const handleSend = async () => {
   clearDraft()
   scrollBottom()
 
+  // 创建 AI 消息占位（使用 reactive 确保响应式更新）
+  const aiMsg = reactive({
+    id: ++msgId,
+    role: 'assistant',
+    content: '',
+    time: formatTime(),
+    references: [],
+    streaming: true  // 标记为流式进行中
+  })
+  messages.value.push(aiMsg)
+
   isLoading.value = true
 
   try {
-    const res = await api.chat({
+    await api.chatStream({
       message: userInput,
       user_id: userStore.userInfo.user_id,
       use_memory: useMemory.value,
       conversation_history_limit: 10
-    })
-
-    if (res.status === 'success') {
-      const data = res.data
-      if (data.error) {
-        messages.value.push({
-          id: ++msgId,
-          role: 'assistant',
-          content: data.error + (data.token_insufficient ? '。请前往充值页面购买Token。' : ''),
-          time: formatTime()
-        })
-        if (data.token_insufficient) {
-          ElMessageBox.alert('Token余额不足，请先充值', '余额不足', {
-            confirmButtonText: '去充值',
-            callback: () => { window.location.href = '/billing' }
-          })
-        }
-      } else {
-        messages.value.push({
-          id: ++msgId,
-          role: 'assistant',
-          content: data.response || data,
-          references: data.references || [],
-          time: formatTime()
-        })
+    }, {
+      onChunk: (chunk) => {
+        aiMsg.content += chunk
+        scrollBottom()
+      },
+      onFinish: (data) => {
+        aiMsg.streaming = false
+        aiMsg.references = data.references || []
         playSound()
         billingStore.fetchTokenBalance()
+        scrollBottom()
+      },
+      onError: (error) => {
+        aiMsg.streaming = false
+        aiMsg.content = error || '发送失败'
+        scrollBottom()
       }
-      scrollBottom()
-    }
-  } catch {
-    ElMessage.error('发送失败')
+    })
+  } catch (err) {
+    aiMsg.streaming = false
+    aiMsg.content = err.message || '发送失败'
+    scrollBottom()
   } finally {
     isLoading.value = false
   }
@@ -658,5 +665,49 @@ onActivated(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 打字机光标 */
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #409EFF;
+  animation: blink 1s infinite;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 流式消息中的光标 */
+.message-item.assistant .message-text:not(.loading) .typing-cursor-inline {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: #409EFF;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+/* 正在思考中的文字 */
+.thinking-text {
+  color: #909399;
+  font-style: italic;
+}
+
+.thinking-dots::after {
+  content: '';
+  animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60%, 100% { content: '...'; }
 }
 </style>
