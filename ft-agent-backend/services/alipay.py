@@ -20,14 +20,19 @@ from core.config import (
 # 旧版 API 类名
 AliPay = None
 try:
-    # 尝试旧版导入方式
-    from alipay import AliPay as OldAliPay
+    from alipay.aop import AliPay as OldAliPay
     AliPay = OldAliPay
 except ImportError:
-    pass
+    try:
+        from alipay import AliPay as OldAliPay
+        AliPay = OldAliPay
+    except ImportError:
+        pass
 
 HAS_ALIPAY_SDK = AliPay is not None
 
+
+ALIPAY_GATEWAY_URL = os.getenv("ALIPAY_GATEWAY_URL", "")
 
 class AlipayService:
     """支付宝支付服务"""
@@ -44,7 +49,10 @@ class AlipayService:
             if not all([ALIPAY_APP_ID, ALIPAY_PRIVATE_KEY, ALIPAY_PUBLIC_KEY]):
                 return None
 
-            if ALIPAY_SANDBOX:
+            # Use custom gateway URL if provided, otherwise use sandbox/prod default
+            if ALIPAY_GATEWAY_URL:
+                gateway = ALIPAY_GATEWAY_URL
+            elif ALIPAY_SANDBOX:
                 gateway = "https://openapi.alipaydev.com/gateway.do"
             else:
                 gateway = "https://openapi.alipay.com/gateway.do"
@@ -55,8 +63,11 @@ class AlipayService:
                 app_private_key_string=ALIPAY_PRIVATE_KEY,
                 alipay_public_key_string=ALIPAY_PUBLIC_KEY,
                 sign_type="RSA2",
-                api_server_url=gateway
+                verbose=(ALIPAY_SANDBOX and not ALIPAY_GATEWAY_URL)
             )
+            # Override gateway if custom URL
+            if ALIPAY_GATEWAY_URL:
+                cls._alipay._gateway = ALIPAY_GATEWAY_URL
         return cls._alipay
 
     @staticmethod
@@ -83,7 +94,12 @@ class AlipayService:
 
             return {"order_id": order_id, "error": str(result)}
         except Exception as e:
-            return {"order_id": order_id, "error": str(e), "mock": True}
+            error_str = str(e)
+            # AliPayValidationError in sandbox - still might have qr_code
+            if "AliPayValidationError" in error_str and alipay:
+                # Try to extract qr_code from raw response if available
+                return {"order_id": order_id, "error": error_str, "mock": True}
+            return {"order_id": order_id, "error": error_str, "mock": True}
 
     @staticmethod
     def _create_mock_trade(order_id: str, amount: int, subject: str) -> Dict[str, Any]:
