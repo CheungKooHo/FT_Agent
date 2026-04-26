@@ -246,6 +246,28 @@ class KnowledgeFile(Base):
     )
 
 
+# 支付订单表
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(String(64), unique=True, index=True)  # 内部订单号
+    user_id = Column(String, index=True)
+    order_type = Column(String)  # "recharge" / "subscription"
+    amount = Column(Integer)  # 金额（分）
+    token_amount = Column(Integer)  # Token 数量
+    payment_channel = Column(String)  # "alipay" / "wechat"
+    status = Column(String, default="pending")  # "pending" / "paid" / "failed" / "refunded"
+    trade_no = Column(String, nullable=True)  # 第三方交易号
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index('idx_po_user', 'user_id'),
+        Index('idx_po_status', 'status'),
+    )
+
+
 # 初始化数据库
 def init_db():
     Base.metadata.create_all(bind=engine)

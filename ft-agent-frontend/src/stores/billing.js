@@ -115,6 +115,26 @@ export const useBillingStore = defineStore('billing', () => {
     }
   }
 
+  // 创建支付订单
+  async function createPaymentOrder(data) {
+    try {
+      const response = await api.createPaymentOrder(data)
+      return response
+    } catch (error) {
+      return { status: 'error', message: error.message }
+    }
+  }
+
+  // 查询支付订单状态
+  async function queryPaymentStatus(orderId) {
+    try {
+      const response = await api.queryPaymentStatus(orderId)
+      return response
+    } catch (error) {
+      return { status: 'error', message: error.message }
+    }
+  }
+
   // 初始化（获取所有信息）
   async function init() {
     await Promise.all([
@@ -138,6 +158,8 @@ export const useBillingStore = defineStore('billing', () => {
     fetchAvailableTiers,
     rechargeToken,
     upgradeSubscription,
+    createPaymentOrder,
+    queryPaymentStatus,
     init
   }
 })

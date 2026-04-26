@@ -266,6 +266,19 @@ const api = {
 
   getTiers: () => {
     return request.get('/tiers')
+  },
+
+  // ===== 支付相关 =====
+  createPaymentOrder: (data) => {
+    return request.post('/payment/create', data)
+  },
+
+  queryPaymentStatus: (orderId) => {
+    return request.get(`/payment/status/${orderId}`)
+  },
+
+  closePaymentOrder: (orderId) => {
+    return request.post(`/payment/close/${orderId}`)
   }
 }
 

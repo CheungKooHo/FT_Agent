@@ -19,7 +19,7 @@ import shutil
 import json
 from pathlib import Path
 from core.engine import run_agent, run_agent_stream, grant_free_token, get_token_balance, count_tokens
-from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory
+from core.database import init_db, SessionLocal, Agent, User, TokenAccount, TokenTransaction, Subscription, UserTier, AdminUser, SystemConfig, UserTierRelation, KnowledgeFile, ConversationHistory, PaymentOrder
 from sqlalchemy import func
 from core.rag_engine import upload_and_index_pdf, search_knowledge_preview, get_collection_stats, get_file_chunks, delete_from_vectorstore
 from core.memory import MemoryManager
@@ -1303,6 +1303,153 @@ async def upgrade_subscription(user_id: str, tier_code: str, user: User = Depend
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+
+# ==================== 支付相关接口 ====================
+
+from services.payment import PaymentService
+from pydantic import BaseModel
+from typing import Optional
+
+
+class CreatePaymentOrderRequest(BaseModel):
+    order_type: str  # "recharge" / "subscription"
+    amount: int  # 金额（分）
+    token_amount: int  # Token 数量
+    channel: str  # "alipay" / "wechat"
+
+
+@app.post("/payment/create")
+async def create_payment_order(
+    request: CreatePaymentOrderRequest,
+    user: User = Depends(get_current_user)
+):
+    """
+    创建支付订单
+
+    请求示例:
+    {
+        "order_type": "recharge",
+        "amount": 1000,
+        "token_amount": 200000,
+        "channel": "alipay"
+    }
+    """
+    try:
+        result = PaymentService.create_order(
+            user_id=user.user_id,
+            order_type=request.order_type,
+            amount=request.amount,
+            token_amount=request.token_amount,
+            channel=request.channel
+        )
+
+        if result.get("status") == "success":
+            return {
+                "status": "success",
+                "order_id": result["order_id"],
+                "qr_code": result.get("qr_code"),
+                "code_url": result.get("code_url")
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/payment/callback/{channel}")
+async def payment_callback(channel: str, request: Request):
+    """
+    支付回调
+
+    - alipay: 支付宝异步通知
+    - wechat: 微信支付异步通知
+    """
+    try:
+        if channel == "alipay":
+            # 支付宝回调是 Form 数据
+            form_data = await request.form()
+            data = dict(form_data)
+            result = PaymentService.handle_callback(channel, data)
+        elif channel == "wechat":
+            # 微信支付回调是 JSON 数据
+            body = await request.body()
+            headers = dict(request.headers)
+            result = PaymentService.handle_callback(channel, None, headers, body)
+        else:
+            return {"status": "error", "message": "不支持的支付渠道"}
+
+        if result.get("success"):
+            return {"status": "success", "message": "回调处理成功"}
+        else:
+            return {"status": "error", "message": result.get("message")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/payment/status/{order_id}")
+async def get_payment_status(
+    order_id: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    查询订单状态
+
+    参数:
+    - order_id: 订单号
+    """
+    try:
+        result = PaymentService.query_order(order_id)
+
+        if result.get("status") == "success":
+            data = result["data"]
+            # 验证订单属于当前用户
+            if data["user_id"] != user.user_id:
+                raise HTTPException(status_code=403, detail="无权限访问")
+            return {
+                "status": "success",
+                "order_id": data["order_id"],
+                "order_type": data["order_type"],
+                "amount": data["amount"],
+                "token_amount": data["token_amount"],
+                "payment_channel": data["payment_channel"],
+                "status": data["order_status"],
+                "trade_no": data["trade_no"],
+                "created_at": data["created_at"],
+                "paid_at": data["paid_at"]
+            }
+        else:
+            raise HTTPException(status_code=404, detail=result.get("message"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/payment/close/{order_id}")
+async def close_payment_order(
+    order_id: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    关闭订单
+
+    参数:
+    - order_id: 订单号
+    """
+    try:
+        result = PaymentService.close_order(order_id)
+
+        if result.get("success"):
+            return {"status": "success", "message": "订单已关闭"}
+        else:
+            raise HTTPException(status_code=400, detail=result.get("message"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/tiers")

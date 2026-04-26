@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(source venv/bin/activate)",
-      "Bash(python main.py)"
+      "Bash(python main.py)",
+      "Bash(python3:*)",
+      "Bash(openssl genrsa -out /Users/klein/Desktop/Klein/FT-Agent/ft-agent-backend/new_key.pem 2048)",
+      "Bash(openssl rsa:*)"
     ]
   }
 }

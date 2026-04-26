@@ -99,7 +99,7 @@
     </div>
 
     <!-- 支付弹窗 -->
-    <el-dialog v-model="showPaymentDialog" title="模拟支付" width="90%" max-width="400px" :close-on-click-modal="false">
+    <el-dialog v-model="showPaymentDialog" title="扫码支付" width="90%" max-width="400px" :close-on-click-modal="false">
       <div v-if="paymentStep === 'form'" class="payment-form">
         <div class="payment-info">
           <p class="payment-title">{{ paymentType === 'recharge' ? 'Token 充值' : '订阅升级' }}</p>
@@ -146,16 +146,23 @@
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <div class="qr-box">
-          <el-icon :size="80" color="#409eff"><Coin /></el-icon>
-          <p>模拟二维码</p>
-          <p class="qr-hint">请使用{{ paymentMethod === 'alipay' ? '支付宝' : '微信' }}扫码</p>
-        </div>
       </div>
 
       <div v-else-if="paymentStep === 'processing'" class="payment-status">
         <el-icon class="is-loading" :size="50"><Loading /></el-icon>
-        <p>支付处理中...</p>
+        <p>正在创建订单...</p>
+      </div>
+
+      <div v-else-if="paymentStep === 'qrcode'" class="payment-qrcode">
+        <p class="qrcode-hint">请使用{{ paymentMethod === 'alipay' ? '支付宝' : '微信' }}扫码支付</p>
+        <div class="qrcode-box">
+          <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="支付二维码" class="qrcode-image" />
+          <div v-else class="qrcode-placeholder">
+            <el-icon :size="60"><Picture /></el-icon>
+            <p>二维码加载中...</p>
+          </div>
+        </div>
+        <p class="qrcode-tip">支付完成后请稍候，系统将自动更新</p>
       </div>
 
       <div v-else-if="paymentStep === 'success'" class="payment-status">
@@ -167,20 +174,23 @@
       <div v-else-if="paymentStep === 'failed'" class="payment-status">
         <el-icon :size="60" color="#f56c6c"><CircleClose /></el-icon>
         <p class="status-text failed">支付失败</p>
-        <p class="status-hint">模拟支付已取消</p>
+        <p class="status-hint">订单已过期或支付失败，请重试</p>
       </div>
 
       <template #footer>
         <div v-if="paymentStep === 'form'">
           <el-button @click="showPaymentDialog = false">取消</el-button>
-          <el-button type="primary" @click="simulatePayment">确认支付</el-button>
+          <el-button type="primary" @click="confirmPayment">确认支付</el-button>
+        </div>
+        <div v-else-if="paymentStep === 'qrcode'">
+          <el-button @click="handleCancelPayment">取消支付</el-button>
         </div>
         <div v-else-if="paymentStep === 'success'">
           <el-button type="primary" @click="showPaymentDialog = false">完成</el-button>
         </div>
         <div v-else-if="paymentStep === 'failed'">
           <el-button @click="showPaymentDialog = false">关闭</el-button>
-          <el-button type="primary" @click="paymentStep = 'form'">重新支付</el-button>
+          <el-button type="primary" @click="paymentStep = 'form'; qrCodeUrl = ''">重新支付</el-button>
         </div>
       </template>
     </el-dialog>
@@ -191,6 +201,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useBillingStore } from '@/stores/billing'
+import api from '@/api'
 
 const billingStore = useBillingStore()
 
@@ -200,6 +211,7 @@ const paymentType = ref('recharge')
 const paymentMethod = ref('alipay')
 const rechargeMoney = ref(10)
 const upgradeTier = ref(null)
+const qrCodeUrl = ref('')
 
 // 预设充值选项（金额：元）
 const rechargeOptions = [
@@ -228,6 +240,94 @@ const openUpgradeDialog = (tier) => {
   paymentStep.value = 'form'
   upgradeTier.value = tier
   showPaymentDialog.value = true
+}
+
+const confirmPayment = async () => {
+  paymentStep.value = 'processing'
+
+  try {
+    // 1. 创建支付订单
+    const orderData = {
+      order_type: paymentType.value,
+      amount: paymentType.value === 'recharge' ? rechargeMoney.value * 100 : upgradeTier.value.price_monthly,
+      token_amount: rechargeTokenAmount.value,
+      channel: paymentMethod.value
+    }
+
+    const order = await billingStore.createPaymentOrder(orderData)
+
+    if (order.status !== 'success') {
+      paymentStep.value = 'failed'
+      return
+    }
+
+    // 2. 获取二维码
+    qrCodeUrl.value = order.qr_code || order.code_url
+    paymentStep.value = 'qrcode'
+
+    // 3. 轮询订单状态（最多30秒）
+    pollOrderStatus(order.order_id)
+  } catch (error) {
+    console.error('支付错误:', error)
+    paymentStep.value = 'failed'
+  }
+}
+
+let pollTimer = null
+
+const pollOrderStatus = async (orderId) => {
+  const maxAttempts = 15
+  let attempts = 0
+
+  const checkStatus = async () => {
+    if (attempts >= maxAttempts) {
+      paymentStep.value = 'failed'
+      return
+    }
+
+    attempts++
+
+    try {
+      const result = await billingStore.queryPaymentStatus(orderId)
+
+      if (result.status === 'paid') {
+        paymentStep.value = 'success'
+        // 刷新余额
+        await billingStore.fetchTokenBalance()
+        if (paymentType.value === 'upgrade') {
+          await billingStore.fetchSubscription()
+        }
+        await billingStore.fetchTransactions()
+      } else if (result.status === 'failed') {
+        paymentStep.value = 'failed'
+      } else {
+        // 继续轮询（每2秒）
+        pollTimer = setTimeout(checkStatus, 2000)
+      }
+    } catch (error) {
+      console.error('查询状态错误:', error)
+      pollTimer = setTimeout(checkStatus, 2000)
+    }
+  }
+
+  checkStatus()
+}
+
+const handleCancelPayment = async () => {
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+  if (qrCodeUrl.value) {
+    // 尝试关闭后端订单
+    try {
+      await api.closePaymentOrder(qrCodeUrl.value.split('/').pop())
+    } catch (e) {
+      console.error('关闭订单失败:', e)
+    }
+  }
+  qrCodeUrl.value = ''
+  paymentStep.value = 'form'
 }
 
 const simulatePayment = async () => {
@@ -506,6 +606,48 @@ onMounted(async () => {
 
 .qr-hint {
   font-size: 12px;
+}
+
+.payment-qrcode {
+  text-align: center;
+}
+
+.qrcode-hint {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.qrcode-box {
+  padding: 16px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 8px;
+  background: #f5f7fa;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qrcode-image {
+  max-width: 200px;
+  max-height: 200px;
+}
+
+.qrcode-placeholder {
+  color: #909399;
+  text-align: center;
+}
+
+.qrcode-placeholder p {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+}
+
+.qrcode-tip {
+  margin: 16px 0 0 0;
+  font-size: 12px;
+  color: #909399;
 }
 
 .payment-status {
