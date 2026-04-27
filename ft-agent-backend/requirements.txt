@@ -43,3 +43,6 @@ tiktoken>=0.5.0,<0.6.0
 
 # Scheduler
 apscheduler>=3.10.4
+
+# Payment
+alipay-sdk-python>=3.7.0

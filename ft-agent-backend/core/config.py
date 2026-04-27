@@ -5,6 +5,8 @@
 """
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # ===== 支付宝配置 =====
 ALIPAY_APP_ID = os.getenv("ALIPAY_APP_ID", "")
