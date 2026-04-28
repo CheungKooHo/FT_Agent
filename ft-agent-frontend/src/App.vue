@@ -71,6 +71,14 @@ html, body {
   --el-fill-color-dark: #141414;
   --el-fill-color-darker: #101010;
   --el-mask-color: rgba(0, 0, 0, 0.7);
+
+  /* 视图通用颜色变量 */
+  --view-bg: #1e1e1e;
+  --view-bg-secondary: #242424;
+  --view-text-primary: #e5e5e5;
+  --view-text-regular: #b0b0b0;
+  --view-text-secondary: #707070;
+  --view-border: #2d2d2d;
 }
 
 /* 全局深色模式覆盖 */
@@ -365,5 +373,124 @@ html, body {
     width: 90% !important;
     max-width: 600px !important;
   }
+}
+
+/* ===== 视图通用深色模式覆盖 ===== */
+.dark .chat-container,
+.dark .knowledge-container,
+.dark .memory-container,
+.dark .history-container,
+.dark .billing-container,
+.dark .profile-container {
+  background: var(--view-bg) !important;
+}
+
+/* Chat 视图 */
+.dark .chat-header {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .chat-input {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .empty-state {
+  color: var(--view-text-secondary) !important;
+}
+
+.dark .sender {
+  color: var(--view-text-regular) !important;
+}
+
+.dark .time {
+  color: var(--view-text-secondary) !important;
+}
+
+.dark .message-item.assistant .message-text {
+  background: var(--view-bg-secondary) !important;
+  color: var(--view-text-primary) !important;
+}
+
+.dark .message-item.user .message-text {
+  background: #409eff !important;
+  color: #fff !important;
+}
+
+.dark .references-section {
+  background: var(--view-bg-secondary) !important;
+}
+
+.dark .references-title {
+  color: var(--view-text-regular) !important;
+}
+
+/* Billing 视图 */
+.dark .balance-card,
+.dark .tier-card,
+.dark .section {
+  background: var(--view-bg) !important;
+}
+
+.dark .tier-desc {
+  color: var(--view-text-secondary) !important;
+}
+
+/* Profile 视图 */
+.dark .profile-card {
+  background: var(--view-bg) !important;
+}
+
+.dark .user-bio {
+  color: var(--view-text-secondary) !important;
+}
+
+.dark .info-label {
+  color: var(--view-text-secondary) !important;
+}
+
+.dark .info-value {
+  color: var(--view-text-primary) !important;
+}
+
+/* Knowledge 视图 */
+.dark .stats-bar {
+  background: var(--view-bg) !important;
+}
+
+.dark .file-card {
+  background: var(--view-bg) !important;
+}
+
+.dark .file-name {
+  color: var(--view-text-primary) !important;
+}
+
+.dark .file-meta,
+.dark .file-time {
+  color: var(--view-text-secondary) !important;
+}
+
+/* Memory 视图 */
+.dark .memory-card {
+  background: var(--view-bg) !important;
+}
+
+.dark .memory-key {
+  color: var(--view-text-primary) !important;
+}
+
+.dark .memory-value {
+  color: var(--view-text-regular) !important;
+}
+
+/* History 视图 */
+.dark .history-card {
+  background: var(--view-bg) !important;
+}
+
+.dark .message-card {
+  background: var(--view-bg) !important;
 }
 </style>
