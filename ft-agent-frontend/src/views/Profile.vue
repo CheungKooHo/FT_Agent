@@ -109,6 +109,14 @@
           </div>
           <el-switch v-model="autoSaveDraft" @change="toggleAutoSaveDraft" />
         </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <el-icon :size="20" color="#909399"><Moon /></el-icon>
+            <span>深色模式</span>
+          </div>
+          <el-switch v-model="isDark" @change="toggleDarkMode" />
+        </div>
       </div>
     </div>
 
@@ -148,11 +156,18 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatLineRound, CollectionTag, Clock, Bell, Document, Edit, Camera } from '@element-plus/icons-vue'
+import { ChatLineRound, CollectionTag, Clock, Bell, Document, Edit, Camera, Moon } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
 import api from '@/api'
 
 const userStore = useUserStore()
+const themeStore = useThemeStore()
+const isDark = ref(themeStore.isDark)
+
+const toggleDarkMode = () => {
+  themeStore.toggleTheme()
+}
 
 const dialogVisible = ref(false)
 const formRef = ref(null)
