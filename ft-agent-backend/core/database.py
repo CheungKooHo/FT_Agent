@@ -287,6 +287,27 @@ class AuditLog(Base):
     )
 
 
+# 退款申请表
+class RefundRequest(Base):
+    __tablename__ = "refund_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(String(64), index=True)  # 关联订单号
+    user_id = Column(String, index=True)  # 申请人
+    reason = Column(Text, nullable=True)  # 退款原因
+    status = Column(String, default="pending")  # pending, approved, rejected
+    admin_id = Column(String, nullable=True)  # 审核管理员
+    admin_note = Column(Text, nullable=True)  # 管理员备注
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_refund_order', 'order_id'),
+        Index('idx_refund_user', 'user_id'),
+        Index('idx_refund_status', 'status'),
+    )
+
+
 # 支付订单表
 class PaymentOrder(Base):
     __tablename__ = "payment_orders"

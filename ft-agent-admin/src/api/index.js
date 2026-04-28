@@ -170,6 +170,20 @@ const api = {
 
   getAuditLogActions: () => {
     return request.get('/admin/audit-logs/actions')
+  },
+
+  // 退款管理
+  getRefundRequests: (page = 1, pageSize = 20, filters = {}) => {
+    const params = { page, page_size: pageSize, ...filters }
+    return request.get('/admin/refund-requests', { params })
+  },
+
+  approveRefund: (requestId, adminNote = '') => {
+    return request.post(`/admin/refund-requests/${requestId}/approve`, null, { params: { admin_note: adminNote } })
+  },
+
+  rejectRefund: (requestId, adminNote = '') => {
+    return request.post(`/admin/refund-requests/${requestId}/reject`, null, { params: { admin_note: adminNote } })
   }
 }
 
