@@ -222,9 +222,10 @@ const handleFeedback = async (msg, rating) => {
 
 const submitFeedback = async (msg, rating, reason) => {
   try {
+    const sessionId = currentSessionId.value || 'default'
     await api.submitFeedback({
-      session_id: currentSessionId.value,
-      message_index: msg.index,
+      session_id: sessionId,
+      message_index: msg.id,
       rating,
       reason
     })
@@ -232,6 +233,7 @@ const submitFeedback = async (msg, rating, reason) => {
     msg.showFeedback = false
   } catch (error) {
     console.error('提交评价失败', error)
+    ElMessage.error('评价提交失败，请重试')
   }
 }
 
