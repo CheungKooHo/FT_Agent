@@ -42,6 +42,7 @@ from routes.subscription import router as subscription_router
 from routes.payment import router as payment_router
 from routes.memory import router as memory_router
 from routes.setup import router as setup_router
+from routes.notifications import router as notifications_router
 from routes.admin.users import router as admin_users_router
 from routes.admin.stats import router as admin_stats_router
 from routes.admin.agents import router as admin_agents_router
@@ -57,6 +58,7 @@ app.include_router(subscription_router)
 app.include_router(payment_router)
 app.include_router(memory_router)
 app.include_router(setup_router)
+app.include_router(notifications_router)
 app.include_router(admin_users_router)
 app.include_router(admin_stats_router)
 app.include_router(admin_agents_router)

@@ -246,6 +246,24 @@ class KnowledgeFile(Base):
     )
 
 
+# 通知表
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    notification_type = Column(String)  # "subscription_expiring", "payment_success", "system"
+    title = Column(String)
+    content = Column(Text)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_notif_user', 'user_id'),
+        Index('idx_notif_read', 'is_read'),
+    )
+
+
 # 支付订单表
 class PaymentOrder(Base):
     __tablename__ = "payment_orders"

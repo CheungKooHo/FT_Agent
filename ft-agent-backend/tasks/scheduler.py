@@ -176,38 +176,65 @@ async def fetch_tax_policies():
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 政策抓取完成 ===")
 
 
-def check_expired_subscriptions():
+def check_expiring_subscriptions():
     """
-    检查并处理过期订阅
-    运行时间: 每天凌晨 2:00
+    检查即将到期的订阅并发送提醒通知，同时处理已过期订阅
+    运行时间: 每天早上 9:00
     """
-    from core.database import SessionLocal, Subscription, UserTier
-    from datetime import datetime
+    from core.database import SessionLocal, Subscription, Notification
+    from datetime import datetime, timedelta
 
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 开始检查过期订阅 ===")
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 开始检查订阅状态 ===")
 
     db = SessionLocal()
     try:
         now = datetime.utcnow()
+        three_days_later = now + timedelta(days=3)
 
-        # 查找所有已过期的 active 订阅
+        # 1. 处理已过期的订阅
         expired_subs = db.query(Subscription).filter(
             Subscription.status == "active",
             Subscription.end_date < now
         ).all()
-
-        print(f"  发现 {len(expired_subs)} 个过期订阅")
-
-        for sub in expired_subs:
-            sub.status = "expired"
-            sub.updated_at = now
-            print(f"  已过期: 用户 {sub.user_id}, 原结束日期 {sub.end_date}")
-
         if expired_subs:
+            for sub in expired_subs:
+                sub.status = "expired"
+                sub.updated_at = now
+                print(f"  已过期: 用户 {sub.user_id}, 原结束日期 {sub.end_date}")
             db.commit()
             print(f"  已更新 {len(expired_subs)} 个订阅状态为 expired")
 
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 过期订阅检查完成 ===")
+        # 2. 查找 3 天内即将到期的 active 订阅
+        expiring_subs = db.query(Subscription).filter(
+            Subscription.status == "active",
+            Subscription.end_date > now,
+            Subscription.end_date <= three_days_later
+        ).all()
+        print(f"  发现 {len(expiring_subs)} 个即将到期订阅")
+
+        for sub in expiring_subs:
+            existing = db.query(Notification).filter(
+                Notification.user_id == sub.user_id,
+                Notification.notification_type == "subscription_expiring",
+                Notification.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+            ).first()
+            if existing:
+                continue
+
+            notification = Notification(
+                user_id=sub.user_id,
+                notification_type="subscription_expiring",
+                title="订阅即将到期",
+                content=f"您的订阅将在 {sub.end_date.strftime('%Y-%m-%d')} 到期，为避免服务中断，请及时续费。",
+                is_read=False
+            )
+            db.add(notification)
+            print(f"  已提醒: 用户 {sub.user_id}, 到期日期 {sub.end_date}")
+
+        if expiring_subs:
+            db.commit()
+
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 订阅状态检查完成 ===")
     except Exception as e:
         print(f"  检查失败: {e}")
         db.rollback()
@@ -225,15 +252,15 @@ def setup_scheduler():
         replace_existing=True
     )
     scheduler.add_job(
-        check_expired_subscriptions,
-        CronTrigger(hour=2, minute=0),
-        id="check_expired_subscriptions",
-        name="检查过期订阅",
+        check_expiring_subscriptions,
+        CronTrigger(hour=9, minute=0),
+        id="check_expiring_subscriptions",
+        name="检查即将到期订阅",
         replace_existing=True
     )
     print("[OK] 定时任务已配置:")
     print("  - 每天 08:00 抓取财税政策")
-    print("  - 每天 02:00 检查过期订阅")
+    print("  - 每天 09:00 检查即将到期订阅并发送提醒")
 
 
 def start_scheduler():
