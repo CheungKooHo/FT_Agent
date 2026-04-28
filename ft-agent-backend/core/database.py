@@ -40,6 +40,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=True)  # 邮箱（可选）
     phone = Column(String, unique=True, index=True, nullable=True)  # 手机号
     nickname = Column(String, nullable=True)               # 昵称
+    avatar_url = Column(String, nullable=True)             # 头像 URL
+    bio = Column(String, nullable=True)                    # 个人简介
     is_active = Column(Boolean, default=True)              # 是否激活
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)

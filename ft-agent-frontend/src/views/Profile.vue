@@ -11,13 +11,20 @@
       </div>
 
       <div class="user-profile">
-        <el-avatar :size="64" class="user-avatar">
-          {{ userStore.userInfo?.nickname?.charAt(0) || userStore.userInfo?.username?.charAt(0) }}
-        </el-avatar>
+        <div class="avatar-wrapper" @click="triggerAvatarUpload">
+          <el-avatar :size="64" class="user-avatar" :src="form.avatar_url">
+            {{ userStore.userInfo?.nickname?.charAt(0) || userStore.userInfo?.username?.charAt(0) }}
+          </el-avatar>
+          <div class="avatar-overlay">
+            <el-icon><Camera /></el-icon>
+          </div>
+        </div>
+        <input ref="avatarInput" type="file" accept="image/*" style="display: none;" @change="handleAvatarChange" />
 
         <div class="user-details">
           <div class="user-name">{{ userStore.userInfo?.nickname || userStore.userInfo?.username }}</div>
-          <div class="user-email">{{ userStore.userInfo?.email || '未设置邮箱' }}</div>
+          <div class="user-bio" v-if="userStore.userInfo?.bio">{{ userStore.userInfo.bio }}</div>
+          <div class="user-bio" v-else style="color: #c0c4cc;">暂无简介</div>
         </div>
       </div>
 
@@ -124,6 +131,10 @@
         <el-form-item label="手机号" prop="phone">
           <el-input v-model="form.phone" placeholder="请输入手机号（可选）" />
         </el-form-item>
+
+        <el-form-item label="个人简介">
+          <el-input v-model="form.bio" type="textarea" :rows="2" placeholder="介绍一下自己（可选）" maxlength="100" show-word-limit />
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -137,6 +148,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ChatLineRound, CollectionTag, Clock, Bell, Document, Edit, Camera } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import api from '@/api'
 
@@ -144,6 +156,7 @@ const userStore = useUserStore()
 
 const dialogVisible = ref(false)
 const formRef = ref(null)
+const avatarInput = ref(null)
 const soundEnabled = ref(localStorage.getItem('soundEnabled') !== 'false')
 const autoSaveDraft = ref(localStorage.getItem('autoSaveDraft') === 'true')
 
@@ -156,7 +169,9 @@ const stats = reactive({
 const form = reactive({
   nickname: '',
   email: '',
-  phone: ''
+  phone: '',
+  avatar_url: '',
+  bio: ''
 })
 
 const rules = {
@@ -183,6 +198,27 @@ const toggleSound = (enabled) => {
 
 const toggleAutoSaveDraft = (enabled) => {
   localStorage.setItem('autoSaveDraft', String(enabled))
+}
+
+const triggerAvatarUpload = () => {
+  avatarInput.value?.click()
+}
+
+const handleAvatarChange = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 2MB')
+    return
+  }
+
+  // 简单处理：转为 base64 URL（生产环境应上传到 OSS）
+  const reader = new FileReader()
+  reader.onload = async (e) => {
+    form.avatar_url = e.target.result
+  }
+  reader.readAsDataURL(file)
 }
 
 const loadStats = async () => {
@@ -226,7 +262,9 @@ const handleSubmit = async () => {
         const response = await api.updateUserInfo(userStore.userInfo.user_id, {
           nickname: form.nickname,
           email: form.email || null,
-          phone: form.phone || null
+          phone: form.phone || null,
+          avatar_url: form.avatar_url || null,
+          bio: form.bio || null
         })
         if (response.status === 'success') {
           userStore.userInfo = { ...userStore.userInfo, ...response.data }
@@ -245,6 +283,8 @@ onMounted(() => {
   form.nickname = userStore.userInfo?.nickname || ''
   form.email = userStore.userInfo?.email || ''
   form.phone = userStore.userInfo?.phone || ''
+  form.avatar_url = userStore.userInfo?.avatar_url || ''
+  form.bio = userStore.userInfo?.bio || ''
   loadStats()
 })
 </script>
@@ -284,6 +324,32 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.avatar-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.avatar-wrapper:hover .avatar-overlay {
+  opacity: 1;
+}
+
 .user-avatar {
   background: linear-gradient(135deg, #409EFF, #67C23A);
   flex-shrink: 0;
@@ -304,6 +370,12 @@ onMounted(() => {
 .user-email {
   font-size: 12px;
   color: #909399;
+}
+
+.user-bio {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 .info-list {

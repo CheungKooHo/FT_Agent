@@ -30,6 +30,8 @@ class UserUpdateRequest(BaseModel):
     nickname: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class AdminLoginRequest(BaseModel):
@@ -204,6 +206,9 @@ async def get_user_info(user_id: str):
                 "username": user.username,
                 "nickname": user.nickname,
                 "email": user.email,
+                "phone": user.phone,
+                "avatar_url": user.avatar_url,
+                "bio": user.bio,
                 "is_active": user.is_active,
                 "created_at": user.created_at.isoformat(),
                 "last_login": user.last_login.isoformat() if user.last_login else None
@@ -247,6 +252,12 @@ async def update_user_info(user_id: str, request: UserUpdateRequest, user: User 
                 raise HTTPException(status_code=400, detail="手机号已被使用")
             target_user.phone = request.phone
 
+        if request.avatar_url is not None:
+            target_user.avatar_url = request.avatar_url
+
+        if request.bio is not None:
+            target_user.bio = request.bio
+
         db.commit()
         db.refresh(target_user)
 
@@ -257,7 +268,10 @@ async def update_user_info(user_id: str, request: UserUpdateRequest, user: User 
                 "user_id": target_user.user_id,
                 "username": target_user.username,
                 "nickname": target_user.nickname,
-                "email": target_user.email
+                "email": target_user.email,
+                "phone": target_user.phone,
+                "avatar_url": target_user.avatar_url,
+                "bio": target_user.bio
             }
         }
     except HTTPException:
