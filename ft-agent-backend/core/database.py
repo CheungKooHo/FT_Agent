@@ -264,6 +264,29 @@ class Notification(Base):
     )
 
 
+# 审计日志表
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)  # 操作人用户ID
+    username = Column(String)  # 操作人用户名
+    action = Column(String)  # 操作类型: login, logout, recharge, grant_token, update_config, etc.
+    target_type = Column(String, nullable=True)  # 操作对象类型: user, tier, agent, config, etc.
+    target_id = Column(String, nullable=True)  # 操作对象ID
+    details = Column(Text, nullable=True)  # 详细信息（JSON格式）
+    ip_address = Column(String, nullable=True)  # 操作人 IP
+    user_agent = Column(String, nullable=True)  # 浏览器 User-Agent
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_audit_user', 'user_id'),
+        Index('idx_audit_action', 'action'),
+        Index('idx_audit_target', 'target_type', 'target_id'),
+        Index('idx_audit_time', 'created_at'),
+    )
+
+
 # 支付订单表
 class PaymentOrder(Base):
     __tablename__ = "payment_orders"

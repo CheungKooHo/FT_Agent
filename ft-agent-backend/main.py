@@ -51,6 +51,7 @@ from routes.admin.tiers import router as admin_tiers_router
 from routes.admin.knowledge import router as admin_knowledge_router
 from routes.admin.system import router as admin_system_router
 from routes.admin.payment import router as admin_payment_router
+from routes.admin.audit import router as admin_audit_router
 from middleware.rate_limit import RateLimitMiddleware
 
 app.include_router(auth_router)
@@ -69,6 +70,7 @@ app.include_router(admin_tiers_router)
 app.include_router(admin_knowledge_router)
 app.include_router(admin_system_router)
 app.include_router(admin_payment_router)
+app.include_router(admin_audit_router)
 
 
 @app.get("/")

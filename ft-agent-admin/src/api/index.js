@@ -160,6 +160,16 @@ const api = {
   getPaymentOrders: (page = 1, pageSize = 20, filters = {}) => {
     const params = { page, page_size: pageSize, ...filters }
     return request.get('/admin/payment/orders', { params })
+  },
+
+  // 审计日志
+  getAuditLogs: (page = 1, pageSize = 50, filters = {}) => {
+    const params = { page, page_size: pageSize, ...filters }
+    return request.get('/admin/audit-logs', { params })
+  },
+
+  getAuditLogActions: () => {
+    return request.get('/admin/audit-logs/actions')
   }
 }
 
