@@ -58,7 +58,7 @@ async def payment_callback(channel: str, request: Request):
         elif channel == "wechat":
             body = await request.body()
             headers = dict(request.headers)
-            result = PaymentService.handle_callback(channel, None, headers, body)
+            result = PaymentService.handle_callback(channel, body, headers)
         else:
             return {"status": "error", "message": "不支持的支付渠道"}
 
