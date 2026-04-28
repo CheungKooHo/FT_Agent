@@ -449,7 +449,14 @@ html, body {
 
 .dark .copy-btn,
 .dark .feedback-btn {
-  color: var(--view-text-secondary) !important;
+  color: var(--view-text-primary) !important;
+  opacity: 0.7 !important;
+}
+
+.dark .copy-btn:hover,
+.dark .feedback-btn:hover {
+  color: #409eff !important;
+  opacity: 1 !important;
 }
 
 /* Billing 视图 */
