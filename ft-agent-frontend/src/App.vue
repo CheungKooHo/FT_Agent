@@ -420,26 +420,47 @@ html, body {
 
 .dark .references-section {
   background: var(--view-bg-secondary) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .references-title {
   color: var(--view-text-regular) !important;
 }
 
+.dark .copy-btn,
+.dark .feedback-btn {
+  color: var(--view-text-secondary) !important;
+}
+
 /* Billing 视图 */
 .dark .balance-card,
-.dark .tier-card,
+.dark .tier-card {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
 .dark .section {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .tier-desc {
   color: var(--view-text-secondary) !important;
 }
 
+.dark .tier-item {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .tier-features li {
+  color: var(--view-text-regular) !important;
+}
+
 /* Profile 视图 */
 .dark .profile-card {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .user-bio {
@@ -454,13 +475,28 @@ html, body {
   color: var(--view-text-primary) !important;
 }
 
+.dark .info-row {
+  border-color: var(--view-border) !important;
+}
+
+.dark .stat-item {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .stat-label {
+  color: var(--view-text-secondary) !important;
+}
+
 /* Knowledge 视图 */
 .dark .stats-bar {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .file-card {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .file-name {
@@ -472,9 +508,18 @@ html, body {
   color: var(--view-text-secondary) !important;
 }
 
+.dark .file-header {
+  border-color: var(--view-border) !important;
+}
+
 /* Memory 视图 */
 .dark .memory-card {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .memory-header {
+  border-color: var(--view-border) !important;
 }
 
 .dark .memory-key {
@@ -488,9 +533,23 @@ html, body {
 /* History 视图 */
 .dark .history-card {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
 }
 
 .dark .message-card {
   background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .card-header {
+  border-color: var(--view-border) !important;
+}
+
+.dark .card-content {
+  color: var(--view-text-primary) !important;
+}
+
+.dark .card-time {
+  color: var(--view-text-secondary) !important;
 }
 </style>
