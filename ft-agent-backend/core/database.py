@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Index, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Index, Boolean, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -24,6 +24,12 @@ else:
     # SQLite 配置（开发环境）
     SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+    # 启用 WAL 模式提升并发读性能
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.execute(text("PRAGMA synchronous=NORMAL"))
+        conn.execute(text("PRAGMA cache_size=10000"))
+        conn.execute(text("PRAGMA temp_store=MEMORY"))
     print("[OK] 使用 SQLite 数据库（开发模式）")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
