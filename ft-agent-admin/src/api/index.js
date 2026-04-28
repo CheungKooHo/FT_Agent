@@ -184,6 +184,15 @@ const api = {
 
   rejectRefund: (requestId, adminNote = '') => {
     return request.post(`/admin/refund-requests/${requestId}/reject`, null, { params: { admin_note: adminNote } })
+  },
+
+  // 评价记录
+  getFeedbackStats: () => {
+    return request.get('/admin/feedback/stats')
+  },
+
+  adminGetFeedbackList: (params = {}) => {
+    return request.get('/admin/feedback/list', { params })
   }
 }
 

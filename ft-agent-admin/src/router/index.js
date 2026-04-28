@@ -67,6 +67,11 @@ const routes = [
         path: 'refund-requests',
         name: 'RefundRequests',
         component: () => import('@/views/RefundRequests.vue')
+      },
+      {
+        path: 'feedback-logs',
+        name: 'FeedbackLogs',
+        component: () => import('@/views/FeedbackLogs.vue')
       }
     ]
   }

@@ -54,6 +54,10 @@
           <el-icon><Memo /></el-icon>
           <span>审计日志</span>
         </el-menu-item>
+        <el-menu-item index="/feedback-logs">
+          <el-icon><Star /></el-icon>
+          <span>评价记录</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
