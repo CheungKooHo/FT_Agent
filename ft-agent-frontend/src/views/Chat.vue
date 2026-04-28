@@ -93,10 +93,10 @@
             </el-button>
             <template v-if="msg.role === 'assistant' && !msg.streaming && msg.showFeedback !== false">
               <el-button type="success" text class="feedback-btn" @click="handleFeedback(msg, 'like')" title="好评">
-                <el-icon><CircleCheck /></el-icon>
+                <el-icon><Select /></el-icon>
               </el-button>
               <el-button type="danger" text class="feedback-btn" @click="handleFeedback(msg, 'dislike')" title="差评">
-                <el-icon><CircleClose /></el-icon>
+                <el-icon><Close /></el-icon>
               </el-button>
             </template>
           </div>
