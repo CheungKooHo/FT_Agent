@@ -396,6 +396,20 @@ html, body {
   border-color: var(--view-border) !important;
 }
 
+.dark .main-header {
+  background: var(--view-bg) !important;
+  border-color: var(--view-border) !important;
+}
+
+.dark .page-title {
+  color: var(--view-text-primary) !important;
+}
+
+.dark .token-badge {
+  background: var(--view-bg-secondary) !important;
+  color: var(--view-text-regular) !important;
+}
+
 .dark .empty-state {
   color: var(--view-text-secondary) !important;
 }
