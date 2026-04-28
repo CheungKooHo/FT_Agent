@@ -181,11 +181,13 @@ def check_expiring_subscriptions():
     检查即将到期的订阅并发送提醒通知，同时处理已过期订阅
     运行时间: 每天早上 9:00
     """
-    from core.database import SessionLocal, Subscription, Notification
+    from core.database import SessionLocal, Subscription, Notification, User
+    from services.email import EmailService
     from datetime import datetime, timedelta
 
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 开始检查订阅状态 ===")
 
+    email_service = EmailService.get_instance()
     db = SessionLocal()
     try:
         now = datetime.utcnow()
@@ -229,6 +231,16 @@ def check_expiring_subscriptions():
                 is_read=False
             )
             db.add(notification)
+
+            # 发送邮件通知
+            user = db.query(User).filter(User.user_id == sub.user_id).first()
+            if user and user.email:
+                email_service.send_subscription_expiring_notification(
+                    user.email,
+                    user.username,
+                    sub.end_date.strftime('%Y-%m-%d')
+                )
+
             print(f"  已提醒: 用户 {sub.user_id}, 到期日期 {sub.end_date}")
 
         if expiring_subs:
