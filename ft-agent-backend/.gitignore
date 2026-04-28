@@ -87,3 +87,5 @@ Desktop.ini
 *.cert
 credentials.json
 secrets.json
+*.db-shm
+*.db-wal
