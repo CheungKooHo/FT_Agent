@@ -130,6 +130,10 @@ class PaymentService:
                         PaymentService._process_subscription(order)
 
                 db.commit()
+
+                # 发送 Webhook 通知
+                PaymentService._send_payment_webhook(order, status)
+
                 return {"success": True, "order_id": order_id, "status": status}
             except Exception as e:
                 db.rollback()
@@ -286,3 +290,30 @@ class PaymentService:
             return {"success": False, "message": str(e)}
         finally:
             db.close()
+
+    @staticmethod
+    def _send_payment_webhook(order: PaymentOrder, status: str) -> None:
+        """发送支付 Webhook 通知"""
+        import os
+        import asyncio
+
+        webhook_url = os.getenv("WEBHOOK_URL", "")
+        if not webhook_url or os.getenv("WEBHOOK_ENABLED", "false").lower() != "true":
+            return
+
+        try:
+            from services.webhook import get_webhook_service
+            webhook_service = get_webhook_service()
+
+            if status == PaymentStatus.PAID:
+                asyncio.create_task(
+                    webhook_service.send_payment_success(
+                        webhook_url,
+                        order.order_id,
+                        order.user_id,
+                        order.amount,
+                        order.token_amount
+                    )
+                )
+        except Exception as e:
+            print(f"Webhook 通知发送失败: {e}")

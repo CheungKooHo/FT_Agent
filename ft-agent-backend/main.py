@@ -58,7 +58,7 @@ from routes.admin.refund import router as admin_refund_router
 from routes.refund import router as refund_router
 from routes.feedback import router as feedback_router
 from routes.admin.feedback import router as admin_feedback_router
-from middleware.rate_limit import RateLimitMiddleware
+from routes.webhook import router as webhook_router
 
 app.include_router(auth_router)
 app.include_router(chat_router)
@@ -81,6 +81,7 @@ app.include_router(admin_refund_router)
 app.include_router(refund_router)
 app.include_router(feedback_router)
 app.include_router(admin_feedback_router)
+app.include_router(webhook_router)
 
 
 @app.get("/")

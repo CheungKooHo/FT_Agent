@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -96,6 +97,24 @@ async def register_user(request: UserRegisterRequest):
             db.commit()
 
         access_token = create_access_token(data={"sub": user.user_id, "username": user.username})
+
+        # 发送用户注册 Webhook
+        import os
+        import asyncio
+        if os.getenv("WEBHOOK_ENABLED", "false").lower() == "true" and os.getenv("WEBHOOK_URL"):
+            try:
+                from services.webhook import get_webhook_service
+                webhook_service = get_webhook_service()
+                asyncio.create_task(
+                    webhook_service.send_user_register(
+                        os.getenv("WEBHOOK_URL"),
+                        user.user_id,
+                        user.username,
+                        user.email
+                    )
+                )
+            except Exception as e:
+                print(f"用户注册 Webhook 发送失败: {e}")
 
         return {
             "status": "success",
