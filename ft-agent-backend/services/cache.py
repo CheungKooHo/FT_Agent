@@ -6,6 +6,7 @@ Redis 缓存服务
 
 import os
 import json
+import hashlib
 from typing import Optional, Any
 import redis
 
@@ -163,3 +164,44 @@ def check_rate_limit(key: str, limit: int, window: int = 60) -> tuple:
         return True, limit - current - 1, ttl
     except Exception:
         return True, limit, 0
+
+
+# RAG 检索缓存
+def cache_rag_search(query: str, collection: str, result: str, expire: int = 3600) -> bool:
+    """缓存 RAG 检索结果，1 小时过期"""
+    cache = get_cache()
+    key = f"rag:{collection}:{hashlib.md5(query.encode()).hexdigest()}"
+    return cache.set_json(key, {"result": result, "query": query}, expire)
+
+
+def get_cached_rag_search(query: str, collection: str) -> Optional[str]:
+    """获取缓存的 RAG 检索结果"""
+    cache = get_cache()
+    key = f"rag:{collection}:{hashlib.md5(query.encode()).hexdigest()}"
+    data = cache.get_json(key)
+    if data:
+        return data.get("result")
+    return None
+
+
+def invalidate_rag_cache(collection: str = None) -> bool:
+    """使 RAG 缓存失效"""
+    cache = get_cache()
+    if not cache.enabled:
+        return False
+
+    try:
+        r = cache._client
+        if collection:
+            # 只删除指定 collection 的缓存
+            pattern = f"rag:{collection}:*"
+        else:
+            # 删除所有 RAG 缓存
+            pattern = "rag:*"
+
+        keys = r.keys(pattern)
+        if keys:
+            r.delete(*keys)
+        return True
+    except Exception:
+        return False

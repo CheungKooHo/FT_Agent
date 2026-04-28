@@ -131,6 +131,10 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
         points=points
     )
 
+    # 使该 collection 的 RAG 缓存失效
+    from services.cache import invalidate_rag_cache
+    invalidate_rag_cache(collection_name)
+
     return {"status": "success", "doc_id": doc_id, "chunks": len(texts)}
 
 def search_knowledge(query: str, collection_name: str):
@@ -140,6 +144,12 @@ def search_knowledge(query: str, collection_name: str):
     - 如果top结果不包含查询关键词，则补充关键词检索
     """
     import re
+    from services.cache import get_cached_rag_search, cache_rag_search
+
+    # 尝试从缓存获取
+    cached = get_cached_rag_search(query, collection_name)
+    if cached:
+        return cached
 
     embeddings = get_embeddings()
     client = get_qdrant_client()
@@ -240,7 +250,12 @@ def search_knowledge(query: str, collection_name: str):
             if len(final_contents) >= 5:
                 break
 
-        return "\n".join(final_contents)
+        result = "\n".join(final_contents)
+
+        # 缓存结果
+        cache_rag_search(query, collection_name, result)
+
+        return result
     except Exception as e:
         print(f"RAG search error: {e}")
         return ""
@@ -403,6 +418,10 @@ def delete_from_vectorstore(collection_name: str, doc_id: str):
             collection_name=collection_name,
             points_selector=point_ids
         )
+
+        # 使该 collection 的 RAG 缓存失效
+        from services.cache import invalidate_rag_cache
+        invalidate_rag_cache(collection_name)
 
         return {"status": "success", "deleted": len(point_ids)}
     except Exception as e:
