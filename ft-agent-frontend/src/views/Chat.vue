@@ -91,7 +91,7 @@
               <el-icon><CopyDocument /></el-icon>
               复制
             </el-button>
-            <el-button v-if="msg.role === 'assistant' && !msg.streaming && msg.showFeedback !== false" type="primary" text class="feedback-btn">
+            <el-button v-if="msg.role === 'assistant' && !msg.streaming && msg.showFeedback !== false" type="primary" text class="feedback-btn" @click="handleFeedback(msg, 'like')">
               <el-icon><Star /></el-icon>
               评价
             </el-button>
