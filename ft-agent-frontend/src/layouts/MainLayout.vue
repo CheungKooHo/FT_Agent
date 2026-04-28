@@ -114,6 +114,19 @@
               >{{ billingStore.tokenBalance }} Token</span
             >
           </div>
+          <el-dropdown @command="handleLanguageChange" trigger="click">
+            <el-icon class="lang-icon"><Translate /></el-icon>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="zh-CN" :disabled="locale === 'zh-CN'">
+                  <span>中文</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="en-US" :disabled="locale === 'en-US'">
+                  <span>English</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </el-header>
 
@@ -127,7 +140,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { ElMessageBox } from "element-plus";
+import { ElMessageBox, ElMessage } from "element-plus";
+import { useI18n } from "vue-i18n";
 import { useUserStore } from "@/stores/user";
 import { useBillingStore } from "@/stores/billing";
 
@@ -135,6 +149,7 @@ const router = useRouter();
 const route = useRoute();
 const userStore = useUserStore();
 const billingStore = useBillingStore();
+const { locale } = useI18n();
 
 const isMobile = ref(false);
 const sidebarVisible = ref(false);
@@ -185,6 +200,12 @@ const handleCommand = async (command) => {
     userStore.logout();
     router.push("/login");
   }
+};
+
+const handleLanguageChange = (lang) => {
+  locale.value = lang;
+  localStorage.setItem('locale', lang);
+  ElMessage.success(lang === 'zh-CN' ? '语言已切换为中文' : 'Language changed to English');
 };
 </script>
 
@@ -485,6 +506,17 @@ const handleCommand = async (command) => {
 
 .token-text {
   white-space: nowrap;
+}
+
+.lang-icon {
+  font-size: 18px;
+  cursor: pointer;
+  color: #606266;
+  transition: color 0.3s;
+}
+
+.lang-icon:hover {
+  color: #409eff;
 }
 
 .main-content {
