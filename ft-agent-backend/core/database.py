@@ -42,6 +42,8 @@ class User(Base):
     nickname = Column(String, nullable=True)               # 昵称
     avatar_url = Column(String, nullable=True)             # 头像 URL
     bio = Column(String, nullable=True)                    # 个人简介
+    email_verified = Column(Boolean, default=False)       # 邮箱是否已验证
+    email_verification_code = Column(String, nullable=True) # 邮箱验证码
     is_active = Column(Boolean, default=True)              # 是否激活
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)

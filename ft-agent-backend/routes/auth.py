@@ -21,6 +21,15 @@ class UserRegisterRequest(BaseModel):
     nickname: Optional[str] = None
 
 
+class EmailVerifyRequest(BaseModel):
+    email: str
+
+
+class EmailVerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
+
 class UserLoginRequest(BaseModel):
     username: str
     password: str
@@ -102,6 +111,75 @@ async def register_user(request: UserRegisterRequest):
                 "free_token_granted": free_token_amount
             }
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.post("/send-email-verification")
+async def send_email_verification(request: EmailVerifyRequest):
+    """发送邮箱验证码"""
+    import secrets
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == request.email).first()
+        if user and user.email_verified:
+            return {"status": "success", "message": "邮箱已验证"}
+
+        code = secrets.token_hex(4).upper()
+        verification_code = f"{code}"
+
+        if user:
+            user.email_verification_code = verification_code
+        else:
+            return {"status": "error", "message": "邮箱未注册"}
+
+        db.commit()
+
+        # 发送邮件
+        from services.email import EmailService
+        email_service = EmailService.get_instance()
+        subject = "【FT-Agent】邮箱验证码"
+        html = f"""
+        <html><body>
+        <p>您好，您的邮箱验证码是：</p>
+        <h2 style="color: #409eff; font-size: 32px; letter-spacing: 4px;">{code}</h2>
+        <p>验证码 10 分钟内有效，请勿泄露给他人。</p>
+        <br/>
+        <p>FT-Agent 财税智能平台</p>
+        </body></html>
+        """
+        email_service.send_email(request.email, subject, html)
+
+        return {"status": "success", "message": "验证码已发送"}
+    finally:
+        db.close()
+
+
+@router.post("/verify-email")
+async def verify_email(request: EmailVerifyCodeRequest, user: User = Depends(get_current_user)):
+    """验证邮箱验证码"""
+    db = SessionLocal()
+    try:
+        if user.email != request.email:
+            raise HTTPException(status_code=400, detail="邮箱不匹配")
+
+        if user.email_verified:
+            return {"status": "success", "message": "邮箱已验证"}
+
+        if user.email_verification_code != request.code:
+            raise HTTPException(status_code=400, detail="验证码错误")
+
+        user.email_verified = True
+        user.email_verification_code = None
+        db.commit()
+
+        return {"status": "success", "message": "邮箱验证成功"}
     except HTTPException:
         raise
     except Exception as e:
@@ -209,6 +287,7 @@ async def get_user_info(user_id: str):
                 "phone": user.phone,
                 "avatar_url": user.avatar_url,
                 "bio": user.bio,
+                "email_verified": user.email_verified,
                 "is_active": user.is_active,
                 "created_at": user.created_at.isoformat(),
                 "last_login": user.last_login.isoformat() if user.last_login else None
