@@ -215,6 +215,12 @@ html, body {
 .dark .el-button--primary {
   background-color: #409eff;
   border-color: #409eff;
+  color: #ffffff;
+}
+
+.dark .el-button--primary:hover {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
 }
 
 .dark .el-message {
