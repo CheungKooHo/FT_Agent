@@ -172,6 +172,10 @@ class PaymentService:
             )
             db.add(transaction)
             db.commit()
+
+            # 使 Token 余额缓存失效
+            from services.cache import invalidate_token_balance
+            invalidate_token_balance(order.user_id)
         finally:
             db.close()
 
@@ -210,6 +214,10 @@ class PaymentService:
                 db.add(subscription)
 
             db.commit()
+
+            # 使缓存失效
+            from services.cache import invalidate_token_balance
+            invalidate_token_balance(order.user_id)
         finally:
             db.close()
 

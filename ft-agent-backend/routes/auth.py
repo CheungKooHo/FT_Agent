@@ -98,6 +98,29 @@ async def register_user(request: UserRegisterRequest):
 
         access_token = create_access_token(data={"sub": user.user_id, "username": user.username})
 
+        # 自动发送验证邮件
+        import secrets
+        if user.email:
+            code = secrets.token_hex(4).upper()
+            user.email_verification_code = code
+            db.commit()
+            try:
+                from services.email import EmailService
+                email_service = EmailService.get_instance()
+                subject = "【FT-Agent】邮箱验证码"
+                html = f"""
+                <html><body>
+                <p>您好，您的邮箱验证码是：</p>
+                <h2 style="color: #409eff; font-size: 32px; letter-spacing: 4px;">{code}</h2>
+                <p>验证码 10 分钟内有效，请勿泄露给他人。</p>
+                <br/>
+                <p>FT-Agent 财税智能平台</p>
+                </body></html>
+                """
+                email_service.send_email(user.email, subject, html)
+            except Exception as e:
+                print(f"发送验证邮件失败: {e}")
+
         # 发送用户注册 Webhook
         import os
         import asyncio
