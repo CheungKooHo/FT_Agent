@@ -7,6 +7,7 @@ from sqlalchemy import func
 
 from core.database import SessionLocal, User, AdminUser, Subscription, UserTier, UserTierRelation, TokenAccount, TokenTransaction, KnowledgeFile, ConversationHistory
 from routes.dependencies import get_current_admin_user
+from services.audit import create_audit_log
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -25,6 +26,16 @@ async def admin_toggle_user_status(
 
         user.is_active = not user.is_active
         db.commit()
+
+        create_audit_log(
+            db,
+            user_id=admin.user_id,
+            username=admin.username,
+            action="toggle_user_status",
+            target_type="user",
+            target_id=user_id,
+            details={"is_active": user.is_active}
+        )
 
         return {
             "status": "success",
@@ -63,6 +74,16 @@ async def admin_grant_token(
         )
         db.add(transaction)
         db.commit()
+
+        create_audit_log(
+            db,
+            user_id=admin.user_id,
+            username=admin.username,
+            action="grant_token",
+            target_type="user",
+            target_id=user_id,
+            details={"amount": amount, "balance_after": account.balance}
+        )
 
         return {
             "status": "success",
