@@ -33,6 +33,7 @@ class APIPrefixMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(APIPrefixMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 from routes.auth import router as auth_router
 from routes.chat import router as chat_router
@@ -50,6 +51,7 @@ from routes.admin.tiers import router as admin_tiers_router
 from routes.admin.knowledge import router as admin_knowledge_router
 from routes.admin.system import router as admin_system_router
 from routes.admin.payment import router as admin_payment_router
+from middleware.rate_limit import RateLimitMiddleware
 
 app.include_router(auth_router)
 app.include_router(chat_router)
