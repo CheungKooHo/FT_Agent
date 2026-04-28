@@ -33,6 +33,8 @@ class APIPrefixMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(APIPrefixMiddleware)
+
+from middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
 
 from routes.auth import router as auth_router
