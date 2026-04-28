@@ -118,6 +118,11 @@ def consume_tokens(user_id: str, amount: int, description: str = "对话消耗")
         )
         db.add(transaction)
         db.commit()
+
+        # 使缓存失效
+        from services.cache import invalidate_token_balance
+        invalidate_token_balance(user_id)
+
         return True
     except Exception as e:
         db.rollback()
@@ -152,6 +157,11 @@ def refund_tokens(user_id: str, amount: int, description: str = "Token 退款") 
         )
         db.add(transaction)
         db.commit()
+
+        # 使缓存失效
+        from services.cache import invalidate_token_balance
+        invalidate_token_balance(user_id)
+
         return True
     except Exception as e:
         db.rollback()
@@ -162,13 +172,33 @@ def refund_tokens(user_id: str, amount: int, description: str = "Token 退款") 
 
 
 def get_token_balance(user_id: str) -> int:
-    """获取用户 Token 余额"""
+    """获取用户 Token 余额（优先从缓存读取）"""
+    from services.cache import get_cached_token_balance
+
+    # 优先从缓存获取
+    cached = get_cached_token_balance(user_id)
+    if cached is not None:
+        return cached
+
+    # 缓存未命中，从数据库获取
     db = SessionLocal()
     try:
         account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
-        return account.balance if account else 0
+        balance = account.balance if account else 0
+
+        # 写入缓存
+        from services.cache import cache_token_balance
+        cache_token_balance(user_id, balance)
+
+        return balance
     finally:
         db.close()
+
+
+def invalidate_token_balance(user_id: str) -> bool:
+    """使 Token 余额缓存失效"""
+    from services.cache import invalidate_token_balance as invalidate
+    return invalidate(user_id)
 
 
 def grant_free_token(user_id: str, amount: int = None) -> bool:
@@ -201,6 +231,11 @@ def grant_free_token(user_id: str, amount: int = None) -> bool:
         )
         db.add(transaction)
         db.commit()
+
+        # 使缓存失效
+        from services.cache import invalidate_token_balance
+        invalidate_token_balance(user_id)
+
         return True
     except Exception as e:
         db.rollback()
