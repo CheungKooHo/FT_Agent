@@ -42,6 +42,18 @@
           <el-icon><Tools /></el-icon>
           <span>系统配置</span>
         </el-menu-item>
+        <el-menu-item index="/payment-orders">
+          <el-icon><Tickets /></el-icon>
+          <span>支付订单</span>
+        </el-menu-item>
+        <el-menu-item index="/refund-requests">
+          <el-icon><Wallet /></el-icon>
+          <span>退款申请</span>
+        </el-menu-item>
+        <el-menu-item index="/audit-logs">
+          <el-icon><Memo /></el-icon>
+          <span>审计日志</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -65,7 +77,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { Setting, DataAnalysis, User, Document, Coin, Operation, PriceTag, Collection, ChatDotRound, Tools } from '@element-plus/icons-vue'
+import { Setting, DataAnalysis, User, Coin, Operation, PriceTag, Collection, ChatDotRound, Tools, Tickets, Wallet, Memo } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
