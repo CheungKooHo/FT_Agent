@@ -91,6 +91,10 @@
               <el-icon><CopyDocument /></el-icon>
               复制
             </el-button>
+            <el-button v-if="msg.role === 'assistant' && !msg.streaming && msg.showFeedback !== false" type="primary" text class="feedback-btn">
+              <el-icon><Star /></el-icon>
+              评价
+            </el-button>
           </div>
         </div>
       </div>
@@ -133,6 +137,21 @@
         </el-button>
       </div>
     </div>
+
+    <!-- 差评原因对话框 -->
+    <el-dialog v-model="showFeedbackDialog" title="提交评价" width="400px">
+      <el-form>
+        <el-form-item label="差评原因">
+          <el-select v-model="feedbackReason" placeholder="请选择原因" style="width: 100%;">
+            <el-option v-for="r in feedbackReasons" :key="r" :label="r" :value="r" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showFeedbackDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmFeedback">提交</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -158,6 +177,7 @@ const autoSaveDraft = ref(localStorage.getItem('autoSaveDraft') === 'true')
 const DRAFT_KEY = 'chat_draft'
 
 let msgId = 0
+const currentSessionId = ref('')
 
 const copyMsg = async (content) => {
   try {
@@ -177,6 +197,51 @@ const copyMsg = async (content) => {
   } catch {
     ElMessage.error('复制失败')
   }
+}
+
+const showFeedbackDialog = ref(false)
+const feedbackRating = ref('')
+const feedbackReason = ref('')
+const currentFeedbackMsg = ref(null)
+const feedbackReasons = ['回答不准确', '回答不完整', '回答难以理解', '不符合政策规定', '其他']
+
+const handleFeedback = async (msg, rating) => {
+  if (!localStorage.getItem('token')) {
+    ElMessage.warning('请先登录')
+    return
+  }
+  currentFeedbackMsg.value = msg
+  if (rating === 'dislike') {
+    showFeedbackDialog.value = true
+    feedbackRating.value = rating
+  } else {
+    // 直接提交好评
+    await submitFeedback(msg, rating, '')
+  }
+}
+
+const submitFeedback = async (msg, rating, reason) => {
+  try {
+    await api.submitFeedback({
+      session_id: currentSessionId.value,
+      message_index: msg.index,
+      rating,
+      reason
+    })
+    ElMessage.success('感谢您的评价')
+    msg.showFeedback = false
+  } catch (error) {
+    console.error('提交评价失败', error)
+  }
+}
+
+const confirmFeedback = async () => {
+  if (!feedbackReason.value && feedbackRating.value === 'dislike') {
+    ElMessage.warning('请选择或输入差评原因')
+    return
+  }
+  await submitFeedback(currentFeedbackMsg.value, feedbackRating.value, feedbackReason.value)
+  showFeedbackDialog.value = false
 }
 
 const playSound = () => {

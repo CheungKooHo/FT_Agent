@@ -279,6 +279,15 @@ const api = {
 
   closePaymentOrder: (orderId) => {
     return request.post(`/payment/close/${orderId}`)
+  },
+
+  // 评价
+  submitFeedback: (data) => {
+    return request.post('/feedback', data)
+  },
+
+  getSessionFeedback: (sessionId) => {
+    return request.get(`/feedback/session/${sessionId}`)
   }
 }
 

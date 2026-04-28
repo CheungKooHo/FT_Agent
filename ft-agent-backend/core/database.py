@@ -287,6 +287,23 @@ class AuditLog(Base):
     )
 
 
+# 对话满意度评价表
+class MessageFeedback(Base):
+    __tablename__ = "message_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    session_id = Column(String, index=True)
+    message_index = Column(Integer)  # 消息在会话中的索引
+    rating = Column(String)  # "like" / "dislike"
+    reason = Column(String, nullable=True)  # 差评原因
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_feedback_session', 'session_id'),
+    )
+
+
 # 退款申请表
 class RefundRequest(Base):
     __tablename__ = "refund_requests"

@@ -54,6 +54,8 @@ from routes.admin.payment import router as admin_payment_router
 from routes.admin.audit import router as admin_audit_router
 from routes.admin.refund import router as admin_refund_router
 from routes.refund import router as refund_router
+from routes.feedback import router as feedback_router
+from routes.admin.feedback import router as admin_feedback_router
 from middleware.rate_limit import RateLimitMiddleware
 
 app.include_router(auth_router)
@@ -75,6 +77,8 @@ app.include_router(admin_payment_router)
 app.include_router(admin_audit_router)
 app.include_router(admin_refund_router)
 app.include_router(refund_router)
+app.include_router(feedback_router)
+app.include_router(admin_feedback_router)
 
 
 @app.get("/")
