@@ -52,6 +52,11 @@ const routes = [
         path: 'system-config',
         name: 'SystemConfig',
         component: () => import('@/views/SystemConfig.vue')
+      },
+      {
+        path: 'payment-orders',
+        name: 'PaymentOrders',
+        component: () => import('@/views/PaymentOrders.vue')
       }
     ]
   }

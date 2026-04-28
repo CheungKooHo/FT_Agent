@@ -154,6 +154,12 @@ const api = {
     return request.post('/admin/knowledge/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+  },
+
+  // 支付订单管理
+  getPaymentOrders: (page = 1, pageSize = 20, filters = {}) => {
+    const params = { page, page_size: pageSize, ...filters }
+    return request.get('/admin/payment/orders', { params })
   }
 }
 
