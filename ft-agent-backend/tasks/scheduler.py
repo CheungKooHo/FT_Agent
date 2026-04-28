@@ -176,6 +176,45 @@ async def fetch_tax_policies():
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 政策抓取完成 ===")
 
 
+def check_expired_subscriptions():
+    """
+    检查并处理过期订阅
+    运行时间: 每天凌晨 2:00
+    """
+    from core.database import SessionLocal, Subscription, UserTier
+    from datetime import datetime
+
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 开始检查过期订阅 ===")
+
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+
+        # 查找所有已过期的 active 订阅
+        expired_subs = db.query(Subscription).filter(
+            Subscription.status == "active",
+            Subscription.end_date < now
+        ).all()
+
+        print(f"  发现 {len(expired_subs)} 个过期订阅")
+
+        for sub in expired_subs:
+            sub.status = "expired"
+            sub.updated_at = now
+            print(f"  已过期: 用户 {sub.user_id}, 原结束日期 {sub.end_date}")
+
+        if expired_subs:
+            db.commit()
+            print(f"  已更新 {len(expired_subs)} 个订阅状态为 expired")
+
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] === 过期订阅检查完成 ===")
+    except Exception as e:
+        print(f"  检查失败: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def setup_scheduler():
     """配置定时任务"""
     scheduler.add_job(
@@ -185,7 +224,16 @@ def setup_scheduler():
         name="抓取财税政策",
         replace_existing=True
     )
-    print("[OK] 定时任务已配置: 每天 08:00 抓取财税政策")
+    scheduler.add_job(
+        check_expired_subscriptions,
+        CronTrigger(hour=2, minute=0),
+        id="check_expired_subscriptions",
+        name="检查过期订阅",
+        replace_existing=True
+    )
+    print("[OK] 定时任务已配置:")
+    print("  - 每天 08:00 抓取财税政策")
+    print("  - 每天 02:00 检查过期订阅")
 
 
 def start_scheduler():
