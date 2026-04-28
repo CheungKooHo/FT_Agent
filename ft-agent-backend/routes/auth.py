@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 
-from core.database import SessionLocal, User, Subscription, UserTier
+from core.database import SessionLocal, User, AdminUser, Subscription, UserTier
 from core.security import create_access_token
 from core.tier_config import TIER_CONFIGS
 from core.engine import grant_free_token
