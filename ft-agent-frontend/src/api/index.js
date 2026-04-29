@@ -288,6 +288,23 @@ const api = {
 
   getSessionFeedback: (sessionId) => {
     return request.get(`/feedback/session/${sessionId}`)
+  },
+
+  // 通知
+  getNotifications: (userId, unreadOnly = false) => {
+    return request.get('/notifications', { params: { user_id: userId, unread_only: unreadOnly } })
+  },
+
+  getUnreadCount: (userId) => {
+    return request.get('/notifications/unread-count', { params: { user_id: userId } })
+  },
+
+  markAsRead: (notificationId, userId) => {
+    return request.post(`/notifications/${notificationId}/read`, null, { params: { user_id: userId } })
+  },
+
+  markAllAsRead: (userId) => {
+    return request.post('/notifications/read-all', null, { params: { user_id: userId } })
   }
 }
 

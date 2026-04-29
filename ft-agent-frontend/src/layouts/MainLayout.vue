@@ -108,6 +108,9 @@
           <h1 class="page-title">{{ pageTitle }}</h1>
         </div>
         <div class="header-right">
+          <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99" class="notification-badge">
+            <el-icon class="notif-icon" @click="showNotificationPanel = true"><Bell /></el-icon>
+          </el-badge>
           <div class="token-badge">
             <el-icon><Coin /></el-icon>
             <span class="token-text"
@@ -133,17 +136,51 @@
       <el-main class="main-content">
         <router-view />
       </el-main>
+
+      <!-- 通知面板 -->
+      <el-drawer v-model="showNotificationPanel" title="通知中心" direction="rtl" size="380px">
+        <div class="notification-panel">
+          <div class="notif-header">
+            <el-button size="small" @click="markAllRead" :disabled="unreadCount === 0">全部已读</el-button>
+          </div>
+          <div v-if="notifications.length === 0" class="notif-empty">
+            <el-empty description="暂无通知" :image-size="80" />
+          </div>
+          <div v-else class="notif-list">
+            <div
+              v-for="item in notifications"
+              :key="item.id"
+              class="notif-item"
+              :class="{ unread: !item.is_read }"
+              @click="handleNotifClick(item)"
+            >
+              <div class="notif-icon-wrap">
+                <el-icon v-if="item.notification_type === 'system'"><InfoFilled /></el-icon>
+                <el-icon v-else-if="item.notification_type === 'subscription'"><Tickets /></el-icon>
+                <el-icon v-else><Bell /></el-icon>
+              </div>
+              <div class="notif-content">
+                <div class="notif-title">{{ item.title }}</div>
+                <div class="notif-text">{{ item.content }}</div>
+                <div class="notif-time">{{ formatTime(item.created_at) }}</div>
+              </div>
+              <div v-if="!item.is_read" class="notif-dot"></div>
+            </div>
+          </div>
+        </div>
+      </el-drawer>
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { useUserStore } from "@/stores/user";
 import { useBillingStore } from "@/stores/billing";
+import api from "@/api";
 
 const router = useRouter();
 const route = useRoute();
@@ -153,6 +190,9 @@ const { locale } = useI18n();
 
 const isMobile = ref(false);
 const sidebarVisible = ref(false);
+const showNotificationPanel = ref(false);
+const notifications = ref([]);
+const unreadCount = ref(0);
 
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 768;
@@ -164,6 +204,11 @@ const checkMobile = () => {
 onMounted(() => {
   checkMobile();
   window.addEventListener("resize", checkMobile);
+  loadUnreadCount();
+});
+
+watch(showNotificationPanel, (val) => {
+  if (val) loadNotifications();
 });
 
 onUnmounted(() => {
@@ -206,6 +251,64 @@ const handleLanguageChange = (lang) => {
   locale.value = lang;
   localStorage.setItem('locale', lang);
   ElMessage.success(lang === 'zh-CN' ? '语言已切换为中文' : 'Language changed to English');
+};
+
+const loadUnreadCount = async () => {
+  if (!userStore.userInfo?.user_id) return;
+  try {
+    const res = await api.getUnreadCount(userStore.userInfo.user_id);
+    if (res.status === 'success') {
+      unreadCount.value = res.data.count;
+    }
+  } catch (e) {
+    // ignore
+  }
+};
+
+const loadNotifications = async () => {
+  if (!userStore.userInfo?.user_id) return;
+  try {
+    const res = await api.getNotifications(userStore.userInfo.user_id);
+    if (res.status === 'success') {
+      notifications.value = res.data;
+    }
+  } catch (e) {
+    // ignore
+  }
+};
+
+const handleNotifClick = async (item) => {
+  if (!item.is_read) {
+    try {
+      await api.markAsRead(item.id, userStore.userInfo.user_id);
+      item.is_read = true;
+      unreadCount.value = Math.max(0, unreadCount.value - 1);
+    } catch (e) {
+      // ignore
+    }
+  }
+};
+
+const markAllRead = async () => {
+  if (!userStore.userInfo?.user_id) return;
+  try {
+    await api.markAllAsRead(userStore.userInfo.user_id);
+    notifications.value.forEach(n => n.is_read = true);
+    unreadCount.value = 0;
+  } catch (e) {
+    // ignore
+  }
+};
+
+const formatTime = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+  return d.toLocaleDateString('zh-CN');
 };
 </script>
 
@@ -606,5 +709,156 @@ const handleLanguageChange = (lang) => {
   .main-content {
     padding: 24px 32px;
   }
+}
+
+/* 通知铃铛 */
+.notification-badge {
+  cursor: pointer;
+}
+
+.notif-icon {
+  font-size: 20px;
+  color: #606266;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.notif-icon:hover {
+  color: #409eff;
+}
+
+/* 通知面板 */
+.notification-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-header {
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid #ebeef5;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.notif-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 4px;
+  border-bottom: 1px solid #ebeef5;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.notif-item:hover {
+  background: #f5f7fa;
+}
+
+.notif-item.unread {
+  background: #f0f9ff;
+}
+
+.notif-item.unread:hover {
+  background: #e6f4ff;
+}
+
+.notif-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ecf5ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #409eff;
+}
+
+.notif-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.notif-text {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-time {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 6px;
+}
+
+.notif-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #409eff;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+/* 深色模式通知 */
+.dark .notif-header {
+  border-color: #2d2d2d;
+}
+
+.dark .notif-item {
+  border-color: #2d2d2d;
+}
+
+.dark .notif-item:hover {
+  background: #242424;
+}
+
+.dark .notif-item.unread {
+  background: rgba(64, 158, 255, 0.08);
+}
+
+.dark .notif-item.unread:hover {
+  background: rgba(64, 158, 255, 0.12);
+}
+
+.dark .notif-icon-wrap {
+  background: rgba(64, 158, 255, 0.15);
+}
+
+.dark .notif-title {
+  color: #e5e5e5;
+}
+
+.dark .notif-text {
+  color: #b0b0b0;
+}
+
+.dark .notif-time {
+  color: #707070;
 }
 </style>

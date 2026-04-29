@@ -193,6 +193,27 @@ const api = {
 
   adminGetFeedbackList: (params = {}) => {
     return request.get('/admin/feedback/list', { params })
+  },
+
+  // 通知管理
+  getNotificationList: (params = {}) => {
+    return request.get('/admin/notifications/list', { params })
+  },
+
+  getNotificationStats: () => {
+    return request.get('/admin/notifications/stats')
+  },
+
+  createNotification: (data) => {
+    return request.post('/admin/notifications/create', null, { params: data })
+  },
+
+  broadcastNotification: (data) => {
+    return request.post('/admin/notifications/broadcast', null, { params: data })
+  },
+
+  deleteNotification: (id) => {
+    return request.delete(`/admin/notifications/${id}`)
   }
 }
 

@@ -72,6 +72,11 @@ const routes = [
         path: 'feedback-logs',
         name: 'FeedbackLogs',
         component: () => import('@/views/FeedbackLogs.vue')
+      },
+      {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/Notifications.vue')
       }
     ]
   }

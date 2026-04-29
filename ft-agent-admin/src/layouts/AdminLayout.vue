@@ -58,6 +58,10 @@
           <el-icon><Star /></el-icon>
           <span>评价记录</span>
         </el-menu-item>
+        <el-menu-item index="/notifications">
+          <el-icon><Bell /></el-icon>
+          <span>通知管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -81,7 +85,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { Setting, DataAnalysis, User, Coin, Operation, PriceTag, Collection, ChatDotRound, Tools, Tickets, Wallet, Memo } from '@element-plus/icons-vue'
+import { Setting, DataAnalysis, User, Coin, Operation, PriceTag, Collection, ChatDotRound, Tools, Tickets, Wallet, Memo, Star, Bell } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
