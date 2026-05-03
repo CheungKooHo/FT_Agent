@@ -131,6 +131,8 @@ async def admin_get_notification_stats(
     admin: AdminUser = Depends(get_current_admin_user)
 ):
     """获取通知统计数据"""
+    import logging
+    logging.warning(f"[Notifications Stats] admin user: {admin.username}")
     db = SessionLocal()
     try:
         total = db.query(func.count(Notification.id)).scalar()

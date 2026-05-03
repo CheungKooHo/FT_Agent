@@ -151,7 +151,10 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/api'
+
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -186,6 +189,12 @@ const broadcastForm = reactive({
 })
 
 const loadData = async () => {
+  console.log('[Notifications] loadData called, isLoggedIn:', authStore.isLoggedIn, 'has token:', !!authStore.token)
+  if (!authStore.isLoggedIn) {
+    console.log('[Notifications] not logged in, skipping')
+    ElMessage.error('请先登录')
+    return
+  }
   loading.value = true
   try {
     const params = {
@@ -199,18 +208,23 @@ const loadData = async () => {
       params.end_date = filter.dateRange[1]
     }
 
+    console.log('[Notifications] calling getNotificationList with params:', params)
     const res = await api.getNotificationList(params)
+    console.log('[Notifications] getNotificationList result:', res)
     if (res.status === 'success') {
       list.value = res.data.list
       pagination.total = res.data.total
     }
 
+    console.log('[Notifications] calling getNotificationStats')
     const statsRes = await api.getNotificationStats()
+    console.log('[Notifications] getNotificationStats result:', statsRes)
     if (statsRes.status === 'success') {
       stats.value = statsRes.data
     }
   } catch (e) {
-    ElMessage.error('加载失败')
+    console.error('[Notifications] loadData error:', e)
+    ElMessage.error('加载失败: ' + (e.response?.data?.detail || e.message || '未知错误'))
   } finally {
     loading.value = false
   }
