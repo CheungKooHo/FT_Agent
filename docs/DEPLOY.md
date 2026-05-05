@@ -21,13 +21,18 @@ apt install -y python3.10 python3.10-venv python3-pip nodejs npm redis-server po
 ### 创建数据库
 
 ```bash
+# 方式一：如果 postgres 用户存在
 sudo -u postgres psql
 
+# 方式二：用 sudo 不支持的用户时，先切换到 postgres 用户
+su - postgres -c "psql"
+
+# 然后在 psql 里执行
 CREATE DATABASE agent_db;
-CREATE USER agent_user WITH ENCRYPTED PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE agent_db TO agent_user;
+CREATE USER ft_agent WITH ENCRYPTED PASSWORD 'ft_agent123';
+GRANT ALL PRIVILEGES ON DATABASE agent_db TO ft_agent;
 \c agent_db
-GRANT ALL ON SCHEMA public TO agent_user;
+GRANT ALL ON SCHEMA public TO ft_agent;
 \q
 ```
 
@@ -51,32 +56,63 @@ cp .env.example .env
 nano .env
 ```
 
-**.env 必需配置：**
+**.env 完整配置（按需修改）：**
 
 ```env
+# ===== 数据库 =====
 DB_TYPE=postgresql
-DB_USER=agent_user
-DB_PASSWORD=your_password
+DB_USER=ft_agent
+DB_PASSWORD=ft_agent123
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=agent_db
 
+# ===== AI 模型（必需）=====
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_API_BASE=https://api.deepseek.com
+HF_ENDPOINT=https://hf-mirror.com
 
+# ===== 支付宝支付 =====
 ALIPAY_APP_ID=your_alipay_app_id
-ALIPAY_PRIVATE_KEY=your_private_key
-ALIPAY_PUBLIC_KEY=your_public_key
-WECHAT_APP_ID=your_wechat_app_id
-WECHAT_MCH_ID=your_wechat_mch_id
-WECHAT_API_KEY=your_wechat_api_key
+ALIPAY_SANDBOX=true
+ALIPAY_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."（填写你的密钥）
+ALIPAY_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----..."（填写你的密钥）
+
+# ===== 微信支付（未配置可留空）=====
+WECHAT_APP_ID=
+WECHAT_MCH_ID=
+WECHAT_API_KEY=
+
+# ===== 支付回调地址 =====
 PAYMENT_CALLBACK_URL=https://your-domain.com/payment/callback
 
+# ===== 邮件服务（可选，暂未启用）=====
 SMTP_ENABLED=false
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email@example.com
+SMTP_PASSWORD=your_email_password
+SMTP_FROM_EMAIL=noreply@example.com
+
+# ===== Redis 缓存（可选）=====
 REDIS_URL=redis://localhost:6379
+
+# ===== Webhook（可选）=====
+WEBHOOK_ENABLED=false
+WEBHOOK_URL=https://your-webhook.com/callback
 ```
 
-### 3. 初始化后端
+> 注意：生产部署请确保 `ALIPAY_SANDBOX=false`，并填写真实的支付宝/微信支付密钥。
+
+### 3. 初始化数据库
+
+导入数据库表结构（使用项目中的 SQL 文件）：
+
+```bash
+psql -U ft_agent -d agent_db -h localhost -f sql/postgresql_schema.sql
+```
+
+### 4. 初始化后端
 
 ```bash
 cd ft-agent-backend
@@ -178,7 +214,7 @@ sudo journalctl -u ft-agent-backend -f
 sudo systemctl restart ft-agent-backend
 
 # 备份数据库
-pg_dump -U agent_user agent_db > backup_$(date +%Y%m%d).sql
+pg_dump -U ft_agent agent_db > backup_$(date +%Y%m%d).sql
 
 # 更新部署
 cd /www/ft-agent && git pull
