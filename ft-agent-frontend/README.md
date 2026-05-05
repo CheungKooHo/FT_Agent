@@ -10,6 +10,10 @@
 - 对话历史查看
 - Token 余额和充值
 - 订阅升级
+- RAG 知识库增强对话
+- 站内通知（铃铛+抽屉面板）
+- 好评差评反馈
+- 深色模式 / 多语言（中文/英文）
 
 ## 快速开始
 
@@ -32,9 +36,16 @@ ft-agent-frontend/
 │   ├── components/        # 公共组件
 │   ├── layouts/           # 布局组件
 │   ├── router/            # 路由配置
-│   ├── stores/            # 状态管理
+│   ├── stores/            # 状态管理 (Pinia)
 │   └── views/             # 页面组件
 ├── index.html
 ├── vite.config.js
 └── package.json
+```
+
+## 配置
+
+创建 `.env.local`：
+```env
+VITE_API_BASE_URL=http://localhost:8000
 ```
