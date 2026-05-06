@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import Optional
 from datetime import datetime
-from sqlalchemy import func
+from sqlalchemy import func, Integer, Boolean
 
 from core.database import SessionLocal, AdminUser, KnowledgeFile
 from core.rag_engine import (
@@ -39,7 +39,7 @@ async def admin_list_knowledge_files(
             func.max(KnowledgeFile.file_size).label("file_size"),
             func.max(KnowledgeFile.file_type).label("file_type"),
             func.max(KnowledgeFile.chunk_count).label("chunk_count"),
-            func.max(KnowledgeFile.is_indexed).label("is_indexed"),
+            func.cast(func.max(func.cast(KnowledgeFile.is_indexed, Integer)), Boolean).label("is_indexed"),
             func.max(KnowledgeFile.created_at).label("created_at"),
             func.count(KnowledgeFile.user_id).label("引用次数")
         )
