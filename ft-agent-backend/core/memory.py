@@ -23,8 +23,27 @@ class MemoryManager:
         self.db = SessionLocal()
 
     def __del__(self):
-        """析构时关闭数据库连接"""
-        self.db.close()
+        """析构时关闭数据库连接（不可靠，尽量使用 close() 或 context manager）"""
+        try:
+            self.db.close()
+        except Exception:
+            pass
+
+    def __enter__(self):
+        """上下文管理器入口"""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器退出"""
+        self.close()
+        return False
+
+    def close(self):
+        """关闭数据库连接"""
+        try:
+            self.db.close()
+        except Exception:
+            pass
 
     # ==================== 对话历史管理 ====================
 

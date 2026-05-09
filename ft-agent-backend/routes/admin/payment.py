@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 
-from core.database import SessionLocal, PaymentOrder, User
+from core.database import SessionLocal, PaymentOrder, AdminUser
 from routes.dependencies import get_current_admin_user
 
 router = APIRouter(prefix="/admin/payment", tags=["Admin支付管理"])
@@ -15,7 +15,7 @@ async def admin_get_payment_orders(
     page_size: int = 20,
     status: Optional[str] = None,
     channel: Optional[str] = None,
-    admin: User = Depends(get_current_admin_user)
+    admin: AdminUser = Depends(get_current_admin_user)
 ):
     """获取支付订单列表（管理后台）"""
     db = SessionLocal()

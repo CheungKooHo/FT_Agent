@@ -90,11 +90,11 @@ const api = {
   },
 
   createAgent: (data) => {
-    return request.post('/admin/agents', null, { params: data })
+    return request.post('/admin/agents', data)
   },
 
   updateAgent: (agentId, data) => {
-    return request.put(`/admin/agents/${agentId}`, null, { params: data })
+    return request.put(`/admin/agents/${agentId}`, data)
   },
 
   deleteAgent: (agentId) => {
@@ -107,11 +107,11 @@ const api = {
   },
 
   createTier: (data) => {
-    return request.post('/admin/tiers', null, { params: data })
+    return request.post('/admin/tiers', data)
   },
 
   updateTier: (tierId, data) => {
-    return request.put(`/admin/tiers/${tierId}`, null, { params: data })
+    return request.put(`/admin/tiers/${tierId}`, data)
   },
 
   deleteTier: (tierId) => {
