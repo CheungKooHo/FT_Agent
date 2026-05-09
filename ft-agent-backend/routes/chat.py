@@ -158,7 +158,7 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
                 if exception_holder[0]:
                     raise exception_holder[0]
                 full_response += chunk
-                data = json.dumps({"content": chunk})
+                data = json.dumps({"content": chunk}, ensure_ascii=False)
                 yield f"data: {data}\n\n"
 
             t.join()
@@ -208,7 +208,7 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
                 "type": "finish",
                 "token_used": actual_tokens,
                 "references": references
-            })
+            }, ensure_ascii=False)
             yield f"data: {finish_data}\n\n"
 
         return StreamingResponse(

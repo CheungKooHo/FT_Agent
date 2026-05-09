@@ -311,28 +311,30 @@ async def admin_login(request: AdminLoginRequest):
 
 
 @router.get("/user/{user_id}")
-async def get_user_info(user_id: str):
-    """获取用户信息"""
+async def get_user_info(user_id: str, user: User = Depends(get_current_user)):
+    """获取用户信息（仅限本人）"""
+    if user.user_id != user_id:
+        raise HTTPException(status_code=403, detail="无权限访问")
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.user_id == user_id).first()
-        if not user:
+        target_user = db.query(User).filter(User.user_id == user_id).first()
+        if not target_user:
             raise HTTPException(status_code=404, detail="用户不存在")
 
         return {
             "status": "success",
             "data": {
-                "user_id": user.user_id,
-                "username": user.username,
-                "nickname": user.nickname,
-                "email": user.email,
-                "phone": user.phone,
-                "avatar_url": user.avatar_url,
-                "bio": user.bio,
-                "email_verified": user.email_verified,
-                "is_active": user.is_active,
-                "created_at": user.created_at.isoformat(),
-                "last_login": user.last_login.isoformat() if user.last_login else None
+                "user_id": target_user.user_id,
+                "username": target_user.username,
+                "nickname": target_user.nickname,
+                "email": target_user.email,
+                "phone": target_user.phone,
+                "avatar_url": target_user.avatar_url,
+                "bio": target_user.bio,
+                "email_verified": target_user.email_verified,
+                "is_active": target_user.is_active,
+                "created_at": target_user.created_at.isoformat(),
+                "last_login": target_user.last_login.isoformat() if target_user.last_login else None
             }
         }
     except HTTPException:

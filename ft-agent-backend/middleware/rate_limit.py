@@ -59,22 +59,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def get_user_id(self, request: Request) -> str:
         """从请求中获取用户标识"""
+        from core.security import verify_token
+
         # 尝试从 Authorization header 获取用户
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
-            # 简单解析 JWT（不验证签名，只获取 user_id）
+            # 验证 JWT 并获取 user_id
             try:
-                import base64
-                import json
-                payload = token.split(".")[1]
-                # 添加 padding
-                padding = 4 - len(payload) % 4
-                if padding != 4:
-                    payload += "=" * padding
-                decoded = base64.urlsafe_b64decode(payload)
-                data = json.loads(decoded)
-                return data.get("sub", "") or "anonymous"
+                payload = verify_token(token)
+                if payload:
+                    return payload.get("sub", "") or "anonymous"
             except Exception:
                 pass
         return "anonymous"

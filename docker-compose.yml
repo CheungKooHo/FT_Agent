@@ -50,7 +50,7 @@ services:
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
       WECHAT_MCH_ID: ${WECHAT_MCH_ID:-}
       WECHAT_API_KEY: ${WECHAT_API_KEY:-}
-      PAYMENT_CALLBACK_URL: ${PAYMENT_CALLBACK_URL:-http://localhost/payment/callback}
+      PAYMENT_CALLBACK_URL: ${PAYMENT_CALLBACK_URL}
 
       # Redis（可选）
       REDIS_URL: ${REDIS_URL:-}
