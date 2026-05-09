@@ -90,6 +90,15 @@ const api = {
         body: JSON.stringify(data)
       }).then(response => {
         if (!response.ok) {
+          if (response.status === 401) {
+            ElMessage.error('登录已过期，请重新登录')
+            const userStore = useUserStore()
+            userStore.logout()
+            router.push('/login')
+            if (onError) onError('登录已过期')
+            reject(new Error('登录已过期'))
+            return
+          }
           throw new Error(`HTTP error! status: ${response.status}`)
         }
 

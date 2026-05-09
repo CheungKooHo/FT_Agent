@@ -29,7 +29,7 @@ async def admin_toggle_user_status(
 
         create_audit_log(
             db,
-            user_id=admin.user_id,
+            user_id=f"admin_{admin.id}",
             username=admin.username,
             action="toggle_user_status",
             target_type="user",
@@ -77,7 +77,7 @@ async def admin_grant_token(
 
         create_audit_log(
             db,
-            user_id=admin.user_id,
+            user_id=f"admin_{admin.id}",
             username=admin.username,
             action="grant_token",
             target_type="user",

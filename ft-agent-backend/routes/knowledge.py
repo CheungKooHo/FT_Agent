@@ -148,7 +148,7 @@ async def delete_knowledge_file(
         except Exception:
             pass
 
-        if kf.user_id == "admin" and kf.agent_type and kf.doc_id:
+        if kf.agent_type and kf.doc_id:
             try:
                 delete_from_vectorstore(kf.agent_type, kf.doc_id)
             except Exception as e:

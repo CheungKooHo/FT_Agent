@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import router from '@/router'
 
 const request = axios.create({
   baseURL: '/api',
@@ -31,7 +32,7 @@ request.interceptors.response.use(
       ElMessage.error('登录已过期，请重新登录')
       localStorage.removeItem('admin_token')
       localStorage.removeItem('adminInfo')
-      window.location.href = '/login'
+      router.push('/login')
     }
     const message = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(message)

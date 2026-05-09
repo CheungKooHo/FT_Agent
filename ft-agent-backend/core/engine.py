@@ -353,8 +353,8 @@ def run_agent(
     input_tokens = count_messages_tokens(messages)
 
     # --- 5.1 检查 Token 余额（仅检查输入，预估输出）---
-    # 保守估计：输出 ≈ 输入 * 1.2
-    estimated_total = int(input_tokens * 2.2)
+    # 预估：输出 ≈ 输入 * 0.5，总量 ≈ 输入 * 1.5（保守）
+    estimated_total = int(input_tokens * 1.5)
     success, msg = check_token_balance(user_id, estimated_total)
     if not success:
         return {"error": msg, "token_insufficient": True}

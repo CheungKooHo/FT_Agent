@@ -15,9 +15,9 @@ const props = defineProps({
   }
 })
 
-// 配置 Markdown-it
+// 配置 Markdown-it (html: false 防止XSS)
 const md = new MarkdownIt({
-  html: true,
+  html: false,
   linkify: true,
   typographer: true,
   highlight: function (str, lang) {
@@ -33,7 +33,10 @@ const md = new MarkdownIt({
 })
 
 const renderedContent = computed(() => {
-  return md.render(props.content)
+  let content = props.content
+  // 阻止 javascript: 链接
+  content = content.replace(/javascript:/gi, '')
+  return md.render(content)
 })
 </script>
 
