@@ -50,6 +50,7 @@ class User(Base):
     bio = Column(String, nullable=True)                    # 个人简介
     email_verified = Column(Boolean, default=False)       # 邮箱是否已验证
     email_verification_code = Column(String, nullable=True) # 邮箱验证码
+    email_verification_expires_at = Column(DateTime, nullable=True) # 验证码过期时间
     is_active = Column(Boolean, default=True)              # 是否激活
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)

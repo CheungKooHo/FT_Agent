@@ -101,8 +101,9 @@ async def register_user(request: UserRegisterRequest):
         # 自动发送验证邮件
         import secrets
         if user.email:
-            code = secrets.token_hex(4).upper()
+            code = secrets.token_hex(32).upper()  # 256位随机数，安全性高
             user.email_verification_code = code
+            user.email_verification_expires_at = datetime.utcnow() + timedelta(minutes=10)
             db.commit()
             try:
                 from services.email import EmailService
@@ -173,11 +174,12 @@ async def send_email_verification(request: EmailVerifyRequest):
         if user and user.email_verified:
             return {"status": "success", "message": "邮箱已验证"}
 
-        code = secrets.token_hex(4).upper()
+        code = secrets.token_hex(32).upper()
         verification_code = f"{code}"
 
         if user:
             user.email_verification_code = verification_code
+            user.email_verification_expires_at = datetime.utcnow() + timedelta(minutes=10)
         else:
             return {"status": "error", "message": "邮箱未注册"}
 
@@ -217,8 +219,12 @@ async def verify_email(request: EmailVerifyCodeRequest, user: User = Depends(get
         if user.email_verification_code != request.code:
             raise HTTPException(status_code=400, detail="验证码错误")
 
+        if user.email_verification_expires_at and datetime.utcnow() > user.email_verification_expires_at:
+            raise HTTPException(status_code=400, detail="验证码已过期，请重新获取")
+
         user.email_verified = True
         user.email_verification_code = None
+        user.email_verification_expires_at = None
         db.commit()
 
         return {"status": "success", "message": "邮箱验证成功"}

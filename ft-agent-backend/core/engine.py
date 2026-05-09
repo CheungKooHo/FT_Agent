@@ -392,7 +392,7 @@ def run_agent(
                 db.flush()
 
             # 计算实际可扣除量（不超过余额）
-            actual_deduct = min(actual_tokens, account.balance)
+            actual_deduct = min(actual_tokens, max(0, account.balance))
             if actual_deduct > 0:
                 account.balance -= actual_deduct
                 account.total_consumed += actual_deduct

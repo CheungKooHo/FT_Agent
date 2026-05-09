@@ -183,7 +183,7 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
                         )
                         db.add(transaction)
                     elif diff < 0:
-                        actual_deduct = min(abs(diff), account.balance)
+                        actual_deduct = min(abs(diff), max(0, account.balance))
                         if actual_deduct > 0:
                             account.balance -= actual_deduct
                             account.total_consumed += actual_deduct
