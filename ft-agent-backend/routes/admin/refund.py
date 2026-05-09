@@ -102,30 +102,32 @@ async def admin_approve_refund(
             TokenAccount.user_id == refund_req.user_id
         ).first()
 
-        if account and account.balance >= order.token_amount:
-            account.balance -= order.token_amount
+        if not account:
+            # 用户没有账户，拒绝退款
+            db.rollback()
+            raise HTTPException(status_code=400, detail="用户账户不存在，无法处理退款")
 
-            transaction = TokenTransaction(
-                user_id=refund_req.user_id,
-                transaction_type="refund",
-                amount=-order.token_amount,
-                balance_after=account.balance,
-                description=f"退款返还: 订单 {order.order_id}",
-                related_order_id=order.order_id
-            )
-            db.add(transaction)
-        elif account:
-            # 余额不足，只记录负向变动
-            transaction = TokenTransaction(
-                user_id=refund_req.user_id,
-                transaction_type="refund",
-                amount=-min(account.balance, order.token_amount),
-                balance_after=0,
-                description=f"退款返还: 订单 {order.order_id}（部分扣除，余额不足）",
-                related_order_id=order.order_id
-            )
-            db.add(transaction)
+        actual_deduct = min(account.balance, order.token_amount)
+        if account.balance >= order.token_amount:
+            # 余额充足，全额扣除
+            account.balance -= order.token_amount
+            balance_after = account.balance
+            desc = f"退款返还: 订单 {order.order_id}"
+        else:
+            # 余额不足，仅扣除现有余额
             account.balance = 0
+            balance_after = 0
+            desc = f"退款返还: 订单 {order.order_id}（实际扣除 {actual_deduct}，原请求 {order.token_amount}）"
+
+        transaction = TokenTransaction(
+            user_id=refund_req.user_id,
+            transaction_type="refund",
+            amount=-actual_deduct,
+            balance_after=balance_after,
+            description=desc,
+            related_order_id=order.order_id
+        )
+        db.add(transaction)
 
         db.commit()
 

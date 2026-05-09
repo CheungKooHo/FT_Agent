@@ -136,18 +136,57 @@ async def admin_list_users(
         all_users = query.all()
         total = len(all_users)
 
+        if not all_users:
+            return {
+                "status": "success",
+                "data": {"total": 0, "page": page, "page_size": page_size, "users": []}
+            }
+
+        # 批量查询相关数据，避免 N+1 问题
+        user_ids = [u.user_id for u in all_users]
+
+        # 批量获取 TokenAccount
+        accounts = {a.user_id: a for a in db.query(TokenAccount).filter(TokenAccount.user_id.in_(user_ids)).all()}
+        # 批量获取 Subscription
+        subs = {s.user_id: s for s in db.query(Subscription).filter(
+            Subscription.user_id.in_(user_ids),
+            Subscription.status == "active"
+        ).all()}
+        # 批量获取 UserTierRelation
+        user_tiers = {ut.user_id: ut for ut in db.query(UserTierRelation).filter(UserTierRelation.user_id.in_(user_ids)).all()}
+
+        # 获取所有相关的 tier_ids
+        tier_ids = set()
+        for sub in subs.values():
+            tier_ids.add(sub.tier_id)
+        # 批量获取 Tier 信息
+        tiers = {t.id: t for t in db.query(UserTier).filter(UserTier.id.in_(tier_ids)).all()} if tier_ids else {}
+
+        # 批量获取 KnowledgeFile 计数
+        from sqlalchemy import func
+        file_counts = {r.user_id: r.count for r in db.query(
+            KnowledgeFile.user_id, func.count(KnowledgeFile.id)
+        ).filter(KnowledgeFile.user_id.in_(user_ids)).group_by(KnowledgeFile.user_id).all()}
+
+        # 批量获取对话会话数
+        conv_counts = {r.user_id: r.count for r in db.query(
+            ConversationHistory.user_id, func.count(ConversationHistory.session_id.distinct())
+        ).filter(ConversationHistory.user_id.in_(user_ids)).group_by(ConversationHistory.user_id).all()}
+
+        # 批量获取充值总额
+        recharge_amounts = {r.user_id: r.total for r in db.query(
+            TokenTransaction.user_id, func.coalesce(func.sum(TokenTransaction.amount), 0)
+        ).filter(
+            TokenTransaction.user_id.in_(user_ids),
+            TokenTransaction.transaction_type == "purchase"
+        ).group_by(TokenTransaction.user_id).all()}
+
         user_data_with_sort = []
         for u in all_users:
-            account = db.query(TokenAccount).filter(TokenAccount.user_id == u.user_id).first()
-            sub = db.query(Subscription).filter(
-                Subscription.user_id == u.user_id,
-                Subscription.status == "active"
-            ).first()
-            tier_obj = None
-            if sub:
-                tier_obj = db.query(UserTier).filter(UserTier.id == sub.tier_id).first()
-            user_tier = db.query(UserTierRelation).filter(UserTierRelation.user_id == u.user_id).first()
-            uploaded_files = db.query(KnowledgeFile).filter(KnowledgeFile.user_id == u.user_id).count()
+            account = accounts.get(u.user_id)
+            sub = subs.get(u.user_id)
+            tier_obj = tiers.get(sub.tier_id) if sub else None
+            user_tier = user_tiers.get(u.user_id)
 
             user_data = {
                 "user_id": u.user_id,
@@ -168,9 +207,9 @@ async def admin_list_users(
                 "subscription_end": sub.end_date.isoformat() if sub and sub.end_date else None,
                 "subscription_end_ts": sub.end_date.timestamp() if sub and sub.end_date else 0,
                 "subscription_status": sub.status if sub else None,
-                "uploaded_files": uploaded_files,
-                "total_conversations": len(set([c.session_id for c in db.query(ConversationHistory).filter(ConversationHistory.user_id == u.user_id).all()])),
-                "total_recharge_tokens": db.query(func.coalesce(func.sum(TokenTransaction.amount), 0)).filter(TokenTransaction.user_id == u.user_id, TokenTransaction.transaction_type == "purchase").scalar()
+                "uploaded_files": file_counts.get(u.user_id, 0),
+                "total_conversations": conv_counts.get(u.user_id, 0),
+                "total_recharge_tokens": recharge_amounts.get(u.user_id, 0)
             }
             user_data_with_sort.append(user_data)
 

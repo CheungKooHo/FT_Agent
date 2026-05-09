@@ -2,9 +2,9 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, I
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-import hashlib
 import secrets
 import os
+import bcrypt
 
 # 数据库配置
 DB_TYPE = os.getenv("DB_TYPE", "sqlite")  # sqlite 或 postgresql
@@ -55,12 +55,13 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
 
     def set_password(self, password: str):
-        """设置密码（使用 SHA256 哈希）"""
-        self.password_hash = hashlib.sha256(password.encode()).hexdigest()
+        """设置密码（使用 bcrypt 哈希）"""
+        salt = bcrypt.gensalt()
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
     def check_password(self, password: str) -> bool:
         """验证密码"""
-        return self.password_hash == hashlib.sha256(password.encode()).hexdigest()
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
     @staticmethod
     def generate_user_id() -> str:
@@ -201,10 +202,11 @@ class AdminUser(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def set_password(self, password: str):
-        self.password_hash = hashlib.sha256(password.encode()).hexdigest()
+        salt = bcrypt.gensalt()
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
     def check_password(self, password: str) -> bool:
-        return self.password_hash == hashlib.sha256(password.encode()).hexdigest()
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
 
 # 系统配置表

@@ -93,16 +93,20 @@ async def admin_broadcast_notification(
     try:
         users = db.query(User.user_id).all()
         count = 0
-        for (uid,) in users:
-            notification = Notification(
-                user_id=uid,
-                notification_type=notification_type,
-                title=title,
-                content=content
-            )
-            db.add(notification)
-            count += 1
-        db.commit()
+        try:
+            for (uid,) in users:
+                notification = Notification(
+                    user_id=uid,
+                    notification_type=notification_type,
+                    title=title,
+                    content=content
+                )
+                db.add(notification)
+                count += 1
+            db.commit()  # 所有通知创建成功后统一提交
+        except Exception as e:
+            db.rollback()  # 失败时回滚
+            raise HTTPException(status_code=500, detail=f"广播失败: {str(e)}")
         return {"status": "success", "message": f"已向 {count} 个用户发送通知"}
     finally:
         db.close()

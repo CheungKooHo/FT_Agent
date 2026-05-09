@@ -521,7 +521,8 @@ def run_agent_stream(
     input_tokens = count_messages_tokens(messages)
 
     # --- 5.1 检查 Token 余额（预估输出）---
-    estimated_total = int(input_tokens * 2.2)
+    # 与非流式保持一致：总量 ≈ 输入 * 1.5
+    estimated_total = int(input_tokens * 1.5)
     success, msg = check_token_balance(user_id, estimated_total)
     if not success:
         return {"error": msg, "token_insufficient": True, "input_tokens": input_tokens}

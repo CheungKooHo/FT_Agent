@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 
-from core.database import SessionLocal, AuditLog, User
+from core.database import SessionLocal, AuditLog, AdminUser
 from routes.dependencies import get_current_admin_user
 
 router = APIRouter(prefix="/admin", tags=["Admin审计"])
@@ -18,7 +18,7 @@ async def admin_get_audit_logs(
     user_id: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    admin: User = Depends(get_current_admin_user)
+    admin: AdminUser = Depends(get_current_admin_user)
 ):
     """获取审计日志列表"""
     db = SessionLocal()
@@ -30,11 +30,17 @@ async def admin_get_audit_logs(
         if user_id:
             query = query.filter(AuditLog.user_id == user_id)
         if start_date:
-            start = datetime.fromisoformat(start_date)
-            query = query.filter(AuditLog.created_at >= start)
+            try:
+                start = datetime.fromisoformat(start_date)
+                query = query.filter(AuditLog.created_at >= start)
+            except ValueError:
+                pass  # 忽略无效日期格式
         if end_date:
-            end = datetime.fromisoformat(end_date)
-            query = query.filter(AuditLog.created_at <= end)
+            try:
+                end = datetime.fromisoformat(end_date)
+                query = query.filter(AuditLog.created_at <= end)
+            except ValueError:
+                pass  # 忽略无效日期格式
 
         total = query.count()
 
@@ -66,7 +72,7 @@ async def admin_get_audit_logs(
 
 
 @router.get("/audit-logs/actions")
-async def admin_get_action_types(admin: User = Depends(get_current_admin_user)):
+async def admin_get_action_types(admin: AdminUser = Depends(get_current_admin_user)):
     """获取所有操作类型"""
     db = SessionLocal()
     try:
