@@ -212,6 +212,7 @@ const paymentMethod = ref('alipay')
 const rechargeMoney = ref(10)
 const upgradeTier = ref(null)
 const qrCodeUrl = ref('')
+const orderId = ref('')
 
 // 预设充值选项（金额：元）
 const rechargeOptions = [
@@ -263,6 +264,7 @@ const confirmPayment = async () => {
 
     // 2. 获取二维码
     qrCodeUrl.value = order.qr_code || order.code_url
+    orderId.value = order.order_id
     paymentStep.value = 'qrcode'
 
     // 3. 轮询订单状态（最多30秒）
@@ -318,15 +320,16 @@ const handleCancelPayment = async () => {
     clearTimeout(pollTimer)
     pollTimer = null
   }
-  if (qrCodeUrl.value) {
+  if (orderId.value) {
     // 尝试关闭后端订单
     try {
-      await api.closePaymentOrder(qrCodeUrl.value.split('/').pop())
+      await api.closePaymentOrder(orderId.value)
     } catch (e) {
       console.error('关闭订单失败:', e)
     }
   }
   qrCodeUrl.value = ''
+  orderId.value = ''
   paymentStep.value = 'form'
 }
 

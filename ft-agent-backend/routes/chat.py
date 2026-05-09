@@ -202,6 +202,7 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
             if memory_manager:
                 memory_manager.add_message("user", user_input, agent_type)
                 memory_manager.add_message("assistant", full_response, agent_type, references=references)
+                memory_manager.close()
 
             finish_data = json.dumps({
                 "type": "finish",
