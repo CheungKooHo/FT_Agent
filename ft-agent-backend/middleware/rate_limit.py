@@ -13,11 +13,26 @@ from starlette.responses import JSONResponse
 class RateLimitStore:
     """简单的内存限流存储（生产环境应使用 Redis）"""
 
-    def __init__(self):
+    def __init__(self, max_keys: int = 10000, cleanup_interval: int = 3600):
         self.requests = defaultdict(list)  # key -> list of timestamps
+        self.max_keys = max_keys
+        self.last_cleanup = time.time()
+        self.cleanup_interval = cleanup_interval
+
+    def _cleanup_if_needed(self):
+        """定期清理过期的keys防止内存无限增长"""
+        now = time.time()
+        if now - self.last_cleanup > self.cleanup_interval:
+            # 清理超过1小时未访问的key
+            cutoff = now - self.cleanup_interval
+            keys_to_delete = [k for k, v in self.requests.items() if not v or max(v) < cutoff]
+            for k in keys_to_delete:
+                del self.requests[k]
+            self.last_cleanup = now
 
     def add_request(self, key: str):
         """记录一次请求"""
+        self._cleanup_if_needed()
         now = time.time()
         self.requests[key].append(now)
 
@@ -25,10 +40,11 @@ class RateLimitStore:
         """获取指定时间窗口内的请求数"""
         now = time.time()
         cutoff = now - window_seconds
-        timestamps = self.requests[key]
+        timestamps = self.requests.get(key, [])
         # 清理过期记录
-        self.requests[key] = [t for t in timestamps if t > cutoff]
-        return len(self.requests[key])
+        timestamps = [t for t in timestamps if t > cutoff]
+        self.requests[key] = timestamps
+        return len(timestamps)
 
     def is_rate_limited(self, key: str, max_requests: int, window_seconds: int = 60) -> bool:
         """检查是否超过限制"""

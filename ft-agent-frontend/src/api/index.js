@@ -75,10 +75,8 @@ const api = {
     const { onChunk, onFinish, onError } = callbacks
     const token = localStorage.getItem('token')
 
-    // 代理被缓冲了，直接请求后端
-    const apiUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:8000/chat/stream'
-      : '/api/chat/stream'
+    // 始终通过代理访问，生产和开发环境都走/api
+    const apiUrl = '/api/chat/stream'
 
     return new Promise((resolve, reject) => {
       fetch(apiUrl, {
