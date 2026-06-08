@@ -30,9 +30,21 @@ fi
 # 激活虚拟环境
 source venv/bin/activate
 
+# 加载环境变量
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
 # 检查依赖
 if [ ! -f "venv/installed" ]; then
     echo "安装后端依赖..."
+    pip install -r requirements.txt
+    touch venv/installed
+fi
+
+# 验证关键包是否能导入，失败则重装
+if ! python -c "import bcrypt" 2>/dev/null; then
+    echo "检测到依赖缺失，重新安装..."
     pip install -r requirements.txt
     touch venv/installed
 fi

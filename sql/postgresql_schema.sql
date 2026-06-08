@@ -1,5 +1,13 @@
 -- FT-Agent 数据库表结构说明
 -- PostgreSQL 生产环境使用
+--
+-- 建库语句（如需新建数据库和用户）：
+-- CREATE DATABASE agent_db;
+-- CREATE USER ft_agent WITH ENCRYPTED PASSWORD 'ft_agent123';
+-- GRANT ALL PRIVILEGES ON DATABASE agent_db TO ft_agent;
+-- \c agent_db
+-- GRANT ALL ON SCHEMA public TO ft_agent;
+-- ALTER DATABASE agent_db OWNER TO ft_agent;
 
 -- 用户表：存放注册用户基本信息
 CREATE TABLE users (
@@ -14,6 +22,7 @@ CREATE TABLE users (
   bio TEXT,                                      -- 个人简介
   email_verified BOOLEAN DEFAULT FALSE,          -- 邮箱是否已验证
   email_verification_code VARCHAR(255),           -- 邮箱验证码
+  email_verification_expires_at TIMESTAMP,        -- 邮箱验证码过期时间
   is_active BOOLEAN DEFAULT TRUE,                -- 账号是否启用
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,-- 注册时间
   last_login TIMESTAMP                           -- 最后登录时间
@@ -234,6 +243,7 @@ COMMENT ON COLUMN users.avatar_url IS '头像 URL';
 COMMENT ON COLUMN users.bio IS '个人简介';
 COMMENT ON COLUMN users.email_verified IS '邮箱是否已验证';
 COMMENT ON COLUMN users.email_verification_code IS '邮箱验证码';
+COMMENT ON COLUMN users.email_verification_expires_at IS '邮箱验证码过期时间';
 COMMENT ON COLUMN users.is_active IS '账号是否启用';
 COMMENT ON COLUMN users.created_at IS '注册时间';
 COMMENT ON COLUMN users.last_login IS '最后登录时间';
@@ -422,5 +432,5 @@ INSERT INTO user_tiers (tier_code, tier_name, description, features, monthly_tok
 ON CONFLICT (tier_code) DO NOTHING;
 
 INSERT INTO admin_users (username, password_hash, role) VALUES
-('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'super_admin')
+('admin', '$2b$12$.Dsli7ueRugC3lz.51ChnuyYQD3nZ4G43wD66DBXtDMu/r1O0TqP2', 'super_admin')
 ON CONFLICT (username) DO NOTHING;
