@@ -15,9 +15,10 @@ services:
       - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ft_agent -d agent_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
     networks:
       - agent-network
