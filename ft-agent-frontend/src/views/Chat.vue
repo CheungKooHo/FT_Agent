@@ -7,7 +7,7 @@
         </el-tag>
         <span class="tier-hint" v-if="billingStore.subscription?.tier === 'basic'">
           <el-link type="primary" :underline="false" @click="$router.push('/billing')">升级专业版</el-link>
-          解锁更多
+          解锁专业分析、计算、方案建议
         </span>
       </div>
       <div class="header-actions">
@@ -26,7 +26,22 @@
       <div v-if="messages.length === 0" class="empty-state">
         <el-icon :size="60" color="#dcdfe6"><ChatDotRound /></el-icon>
         <p>开始与财税专家对话</p>
-        <p class="hint">输入您的问题，AI专家将为您解答</p>
+        <p class="hint">基础版可答政策，专业版更可分析方案</p>
+        <!-- 推荐问题 -->
+        <div class="recommended-questions">
+          <p class="rq-title">试试这样问:</p>
+          <div class="rq-list">
+            <el-tag
+              v-for="q in recommendedQuestions"
+              :key="q"
+              type="info"
+              class="rq-tag"
+              @click="fillQuestion(q)"
+            >
+              {{ q }}
+            </el-tag>
+          </div>
+        </div>
       </div>
 
       <div
@@ -38,8 +53,10 @@
         <el-avatar v-if="msg.role === 'user'" :size="36" class="avatar">
           {{ userStore.userInfo?.nickname?.charAt(0) || '我' }}
         </el-avatar>
-        <el-avatar v-else :size="36" class="avatar" :style="{ background: '#409EFF' }">
-          <el-icon><Robot /></el-icon>
+        <el-avatar v-else :size="36" class="avatar">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="#409EFF">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
         </el-avatar>
 
         <div class="message-body">
@@ -91,6 +108,16 @@
               <el-icon><CopyDocument /></el-icon>
               复制
             </el-button>
+            <el-button
+              type="warning"
+              text
+              class="copy-btn"
+              @click="toggleFavorite(msg)"
+              :title="isFavorited(msg) ? '取消收藏' : '收藏'"
+            >
+              <el-icon><Star /></el-icon>
+              {{ isFavorited(msg) ? '已收藏' : '收藏' }}
+            </el-button>
             <template v-if="msg.role === 'assistant' && !msg.streaming && msg.showFeedback !== false">
               <el-button type="success" text class="feedback-btn" @click="handleFeedback(msg, 'like')" title="好评">
                 👍
@@ -99,6 +126,14 @@
                 👎
               </el-button>
             </template>
+          </div>
+          <!-- 内联差评原因选择 -->
+          <div v-if="msg.showDislikeReason" class="dislike-reason-inline">
+            <el-select v-model="feedbackReason" placeholder="请选择原因" size="small" style="width: 160px;">
+              <el-option v-for="r in feedbackReasons" :key="r" :label="r" :value="r" />
+            </el-select>
+            <el-button size="small" type="primary" @click="confirmInlineDislike(msg)">提交</el-button>
+            <el-button size="small" @click="msg.showDislikeReason = false">取消</el-button>
           </div>
         </div>
       </div>
@@ -120,15 +155,35 @@
     </div>
 
     <div class="chat-input">
+      <!-- 图片上传 -->
+      <div v-if="uploadedImageText" class="uploaded-image-preview">
+        <span class="image-text">{{ uploadedImageText }}</span>
+        <el-button type="danger" size="small" text @click="uploadedImageText = ''">移除</el-button>
+      </div>
       <el-input
         v-model="inputMessage"
         type="textarea"
         :rows="3"
-        placeholder="输入财税问题..."
+        placeholder="输入财税问题，或上传截图提问..."
         resize="none"
         @keydown.ctrl.enter="handleSend"
       />
+      <div class="input-actions">
+        <el-upload
+          :before-upload="handleImageUpload"
+          :show-file-list="false"
+          accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
+        >
+          <el-button text :icon="Upload" title="上传截图或图片" />
+        </el-upload>
+      </div>
       <div class="input-footer">
+        <!-- 基础版用户试用入口 -->
+        <div v-if="billingStore.subscription?.tier === 'basic'" class="trial-hint">
+          <el-button type="warning" size="small" plain @click="tryProAnswer">
+            试用专业版回答 (剩余{{ trialProCount }}次)
+          </el-button>
+        </div>
         <el-checkbox v-model="useMemory" size="small">启用记忆</el-checkbox>
         <el-button
           type="primary"
@@ -141,21 +196,6 @@
         </el-button>
       </div>
     </div>
-
-    <!-- 差评原因对话框 -->
-    <el-dialog v-model="showFeedbackDialog" title="提交评价" width="400px">
-      <el-form>
-        <el-form-item label="差评原因">
-          <el-select v-model="feedbackReason" placeholder="请选择原因" style="width: 100%;">
-            <el-option v-for="r in feedbackReasons" :key="r" :label="r" :value="r" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showFeedbackDialog = false">取消</el-button>
-        <el-button type="primary" @click="confirmFeedback">提交</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -176,9 +216,102 @@ const isLoading = ref(false)
 const useMemory = ref(true)
 const messageListRef = ref(null)
 
+// 收藏功能
+const favorites = ref([])
+
+const loadFavorites = () => {
+  const saved = localStorage.getItem('favorite_messages')
+  if (saved) favorites.value = JSON.parse(saved)
+}
+
+const isFavorited = (msg) => {
+  return favorites.value.some(f => f.id === msg.id)
+}
+
+const toggleFavorite = (msg) => {
+  const idx = favorites.value.findIndex(f => f.id === msg.id)
+  if (idx >= 0) {
+    favorites.value.splice(idx, 1)
+    ElMessage.success('已取消收藏')
+  } else {
+    favorites.value.push({
+      id: msg.id,
+      content: msg.content,
+      time: msg.time,
+      sessionId: currentSessionId.value || 'default'
+    })
+    ElMessage.success('已收藏')
+  }
+  localStorage.setItem('favorite_messages', JSON.stringify(favorites.value))
+}
+
 const soundEnabled = ref(localStorage.getItem('soundEnabled') !== 'false')
 const autoSaveDraft = ref(localStorage.getItem('autoSaveDraft') === 'true')
 const DRAFT_KEY = 'chat_draft'
+
+// 专业版试用
+const trialProCount = ref(3)
+const useTrialPro = ref(false)
+
+const tryProAnswer = () => {
+  if (trialProCount.value <= 0) {
+    ElMessage.warning('本月试用次数已用完，升级专业版解锁更多')
+    return
+  }
+  useTrialPro.value = true
+  ElMessage.info('已启用专业版尝鲜，本次回答将由专业版提供')
+}
+
+// 图片上传
+const uploadedImageText = ref('')
+
+const handleImageUpload = async (file) => {
+  const isImage = file.type.startsWith('image/')
+  if (!isImage) {
+    ElMessage.warning('请上传图片文件')
+    return false
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/upload_image', {
+      method: 'POST',
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' },
+      body: formData
+    })
+    const res = await response.json()
+
+    if (res.status === 'success') {
+      if (res.extracted_text) {
+        uploadedImageText.value = res.extracted_text
+        ElMessage.success('图片上传成功，已提取文字')
+      } else {
+        ElMessage.success('图片上传成功')
+      }
+    } else {
+      ElMessage.error(res.detail || '上传失败')
+    }
+  } catch (e) {
+    ElMessage.error('上传失败: ' + e.message)
+  }
+  return false // 阻止默认上传
+}
+
+// 推荐问题
+const recommendedQuestions = [
+  '企业所得税最新优惠政策有哪些?',
+  '增值税专用发票和普通发票的区别',
+  '个人所得税专项附加扣除标准',
+  '公司报销哪些发票可以抵扣?',
+  '小微企业税收优惠政策汇总'
+]
+
+const fillQuestion = (q) => {
+  inputMessage.value = q
+}
 
 let msgId = 0
 const currentSessionId = ref('')
@@ -215,12 +348,15 @@ const handleFeedback = async (msg, rating) => {
     return
   }
   currentFeedbackMsg.value = msg
+  feedbackRating.value = rating
+
   if (rating === 'dislike') {
-    showFeedbackDialog.value = true
-    feedbackRating.value = rating
+    // 差评：显示内联原因选择
+    msg.showDislikeReason = !msg.showDislikeReason
   } else {
-    // 直接提交好评
-    await submitFeedback(msg, rating, '')
+    // 好评：直接提交
+    await submitFeedback(msg, rating, 'good')
+    ElMessage.info('感谢您的好评')
   }
 }
 
@@ -233,21 +369,21 @@ const submitFeedback = async (msg, rating, reason) => {
       rating,
       reason
     })
-    ElMessage.success('感谢您的评价')
     msg.showFeedback = false
+    msg.showDislikeReason = false
   } catch (error) {
     console.error('提交评价失败', error)
     ElMessage.error('评价提交失败，请重试')
   }
 }
 
-const confirmFeedback = async () => {
-  if (!feedbackReason.value && feedbackRating.value === 'dislike') {
-    ElMessage.warning('请选择或输入差评原因')
+const confirmInlineDislike = async (msg) => {
+  if (!feedbackReason.value) {
+    ElMessage.warning('请选择差评原因')
     return
   }
-  await submitFeedback(currentFeedbackMsg.value, feedbackRating.value, feedbackReason.value)
-  showFeedbackDialog.value = false
+  await submitFeedback(msg, 'dislike', feedbackReason.value)
+  ElMessage.info('感谢您的反馈')
 }
 
 const playSound = () => {
@@ -313,16 +449,23 @@ const handleSend = async () => {
     return
   }
 
+  // 组装消息内容（包含图片文字）
+  let fullContent = inputMessage.value.trim()
+  if (uploadedImageText.value) {
+    fullContent = `[用户上传了截图，提取的文字内容:]\n${uploadedImageText.value}\n\n[用户问题:]\n${inputMessage.value.trim()}`
+  }
+
   const userMsg = {
     id: ++msgId,
     role: 'user',
-    content: inputMessage.value.trim(),
+    content: fullContent,
     time: formatTime()
   }
 
   messages.value.push(userMsg)
-  const userInput = inputMessage.value.trim()
+  const userInput = fullContent
   inputMessage.value = ''
+  uploadedImageText.value = '' // 清空图片文字
   clearDraft()
   scrollBottom()
 
@@ -339,12 +482,20 @@ const handleSend = async () => {
 
   isLoading.value = true
 
+  // 记录是否使用试用专业版
+  const isTrialPro = useTrialPro.value && billingStore.subscription?.tier === 'basic'
+  // 重置试用标记（只本次有效）
+  if (isTrialPro) {
+    useTrialPro.value = false
+  }
+
   try {
     await api.chatStream({
       message: userInput,
       user_id: userStore.userInfo.user_id,
       use_memory: useMemory.value,
-      conversation_history_limit: 10
+      conversation_history_limit: 10,
+      trial_pro: isTrialPro
     }, {
       onChunk: (chunk) => {
         aiMsg.content += chunk
@@ -381,6 +532,8 @@ const handleExport = () => {
   messages.value.forEach(m => {
     content += `[${m.time}] ${m.role === 'user' ? '用户' : 'AI'}:\n${m.content}\n\n`
   })
+  // \u6dfb\u52a0\u514d\u8d23\u58f0\u660e
+  content += `\n${'='.repeat(50)}\n\u514d\u8d23\u58f0\u660e: \u672c\u5bf9\u8bdd\u5185\u5bb9\u7531AI\u751f\u6210,\u4ec5\u4f9b\u53c2\u8003, \u4e0d\u6784\u6210\u4e13\u4e1a\u8d22\u7a0e\u5efa\u8bae\u3002\u5982\u9700\u51c6\u786e\u4fe1\u606f, \u8bf7\u54a8\u8be2\u6301\u8bc1\u8d22\u7a0e\u4e13\u5bb6\u3002`
   const blob = new Blob(['\ufeff' + content], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -455,7 +608,20 @@ onMounted(async () => {
   await billingStore.init()
   loadHistory()
   loadDraft()
+  loadFavorites()
+  fetchTrialCount()
 })
+
+const fetchTrialCount = async () => {
+  try {
+    const res = await api.getTrialCount()
+    if (res.status === 'success') {
+      trialProCount.value = res.trial_pro_count
+    }
+  } catch (e) {
+    console.error('获取试用次数失败', e)
+  }
+}
 
 onActivated(() => {
   nextTick(() => {
@@ -684,6 +850,32 @@ onActivated(() => {
   margin-top: 10px;
 }
 
+.input-actions {
+  position: absolute;
+  left: 28px;
+  bottom: 70px;
+}
+
+.uploaded-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.uploaded-image-preview .image-text {
+  flex: 1;
+  color: #606266;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (min-width: 768px) {
   .chat-header {
     padding: 16px 24px;
@@ -780,5 +972,44 @@ onActivated(() => {
   0%, 20% { content: '.'; }
   40% { content: '..'; }
   60%, 100% { content: '...'; }
+}
+
+/* 内联差评原因选择 */
+.dislike-reason-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: #fff5f5;
+  border-radius: 4px;
+  max-width: 320px;
+}
+
+/* 推荐问题 */
+.recommended-questions {
+  margin-top: 20px;
+  text-align: left;
+  max-width: 500px;
+}
+
+.rq-title {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 10px;
+}
+
+.rq-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rq-tag {
+  cursor: pointer;
+}
+
+.rq-tag:hover {
+  opacity: 0.8;
 }
 </style>

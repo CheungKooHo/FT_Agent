@@ -21,6 +21,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     use_memory: bool = True
     conversation_history_limit: int = 10
+    trial_pro: bool = False  # 是否试用专业版
 
 
 def get_agent_type_by_user(db, user_id: str, fallback_agent_type: Optional[str] = None) -> str:
@@ -81,7 +82,14 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
     try:
         db = SessionLocal()
         try:
+            # 处理专业版试用逻辑
             agent_type = get_agent_type_by_user(db, request.user_id, request.agent_type)
+            if request.trial_pro and agent_type == "tax_basic":
+                account = db.query(TokenAccount).filter(TokenAccount.user_id == request.user_id).first()
+                if account and account.trial_pro_count > 0:
+                    account.trial_pro_count -= 1
+                    agent_type = "tax_pro"
+                    db.commit()
         finally:
             db.close()
 
@@ -221,5 +229,24 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
             }
         )
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/user/trial-count")
+async def get_trial_count(user: User = Depends(get_current_user)):
+    """获取用户专业版试用剩余次数"""
+    try:
+        db = SessionLocal()
+        try:
+            account = db.query(TokenAccount).filter(TokenAccount.user_id == user.user_id).first()
+            if not account:
+                # 创建新账户，默认3次试用
+                account = TokenAccount(user_id=user.user_id, balance=0, trial_pro_count=3)
+                db.add(account)
+                db.commit()
+            return {"status": "success", "trial_pro_count": account.trial_pro_count}
+        finally:
+            db.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

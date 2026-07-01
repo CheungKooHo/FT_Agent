@@ -31,6 +31,7 @@
       <div class="section-header">
         <h3>订阅方案</h3>
         <span class="hint">升级后自动享受更多权益</span>
+        <el-button type="primary" link @click="showCompareDialog = true">套餐对比</el-button>
       </div>
       <div class="tier-grid">
         <div
@@ -194,6 +195,32 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 套餐对比对话框 -->
+    <el-dialog v-model="showCompareDialog" title="套餐功能对比" width="500px">
+      <el-table :data="compareTableData" border>
+        <el-table-column prop="feature" label="功能" width="180" />
+        <el-table-column label="基础版" align="center">
+          <template #default="{ row }">
+            <span v-if="row.basic === true" class="text-success">✓</span>
+            <span v-else-if="row.basic === false" class="text-muted">—</span>
+            <span v-else class="text-info">{{ row.basic }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="专业版" align="center">
+          <template #default="{ row }">
+            <span v-if="row.pro === true" class="text-success">✓</span>
+            <span v-else class="text-info">{{ row.pro }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="showCompareDialog = false; openUpgradeDialog(billingStore.availableTiers.find(t => t.tier_code === 'pro'))">
+          立即升级专业版
+        </el-button>
+        <el-button @click="showCompareDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -213,6 +240,17 @@ const rechargeMoney = ref(10)
 const upgradeTier = ref(null)
 const qrCodeUrl = ref('')
 const orderId = ref('')
+const showCompareDialog = ref(false)
+
+// 套餐对比数据
+const compareTableData = [
+  { feature: '财税政策问答', basic: true, pro: true },
+  { feature: '专业方案分析', basic: false, pro: true },
+  { feature: '税费计算服务', basic: false, pro: true },
+  { feature: '合规风险提示', basic: false, pro: true },
+  { feature: '每月 Token 额度', basic: '100万', pro: '500万' },
+  { feature: '专业版试用机会', basic: '3次/月', pro: '不限' }
+]
 
 // 预设充值选项（金额：元）
 const rechargeOptions = [
@@ -765,5 +803,19 @@ onMounted(async () => {
 .custom-unit {
   font-size: 13px;
   color: #909399;
+}
+
+.text-success {
+  color: #67c23a;
+  font-weight: bold;
+}
+
+.text-muted {
+  color: #c0c4cc;
+}
+
+.text-info {
+  color: #409eff;
+  font-size: 13px;
 }
 </style>

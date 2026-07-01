@@ -36,6 +36,10 @@ const renderedContent = computed(() => {
   let content = props.content
   // 阻止 javascript: 链接
   content = content.replace(/javascript:/gi, '')
+
+  // 处理重点标记【】为高亮样式
+  content = content.replace(/【([^】]+)】/g, '<mark class="highlight">$1</mark>')
+
   return md.render(content)
 })
 </script>
@@ -141,5 +145,17 @@ const renderedContent = computed(() => {
   height: auto;
   border-radius: 4px;
   margin: 8px 0;
+}
+
+/* 重点内容高亮标记 */
+.markdown-content :deep(mark.highlight) {
+  background: #ffe6e6;
+  color: #f56c6c;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: #f56c6c;
+  text-underline-offset: 2px;
 }
 </style>

@@ -64,8 +64,8 @@ from routes.admin.feedback import router as admin_feedback_router
 from routes.admin.notifications import router as admin_notifications_router
 from routes.webhook import router as webhook_router
 
+app.include_router(chat_router)  # 先注册 chat，确保 /user/trial-count 被正确匹配
 app.include_router(auth_router)
-app.include_router(chat_router)
 app.include_router(knowledge_router)
 app.include_router(token_router)
 app.include_router(subscription_router)

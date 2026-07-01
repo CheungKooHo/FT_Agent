@@ -1,5 +1,11 @@
 <template>
-  <router-view />
+  <div class="app-wrapper">
+    <router-view style="padding-bottom: 32px;" />
+    <!-- 免责声明 -->
+    <div class="disclaimer-bar">
+      <span>内容由AI生成，仅供参考，不构成专业财税建议。如需准确信息，请咨询持证财税专家。</span>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -34,6 +40,30 @@ html, body {
   width: 100%;
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.app-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.disclaimer-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.05);
+  text-align: center;
+  padding: 6px 16px;
+  font-size: 11px;
+  color: #909399;
+  z-index: 100;
+}
+
+.dark .disclaimer-bar {
+  background: rgba(255, 255, 255, 0.05);
+  color: #707070;
 }
 
 /* Element Plus 亮色主题 */

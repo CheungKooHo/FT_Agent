@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Index, Boolean, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Index, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -6,31 +6,16 @@ import secrets
 import os
 import bcrypt
 
-# 数据库配置
-DB_TYPE = os.getenv("DB_TYPE", "sqlite")  # sqlite 或 postgresql
+# PostgreSQL 配置
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "agent_db")
 
-if DB_TYPE == "postgresql":
-    # PostgreSQL 配置
-    DB_USER = os.getenv("DB_USER", "postgres")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
-    DB_HOST = os.getenv("DB_HOST", "localhost")
-    DB_PORT = os.getenv("DB_PORT", "5432")
-    DB_NAME = os.getenv("DB_NAME", "agent_db")
-
-    SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_size=10, max_overflow=20)
-    print(f"[OK] 使用 PostgreSQL 数据库: {DB_HOST}:{DB_PORT}/{DB_NAME}")
-else:
-    # SQLite 配置（开发环境）
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
-    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-    # 启用 WAL 模式提升并发读性能
-    with engine.connect() as conn:
-        conn.execute(text("PRAGMA journal_mode=WAL"))
-        conn.execute(text("PRAGMA synchronous=NORMAL"))
-        conn.execute(text("PRAGMA cache_size=10000"))
-        conn.execute(text("PRAGMA temp_store=MEMORY"))
-    print("[OK] 使用 SQLite 数据库（开发模式）")
+SQLALCHEMY_DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_size=10, max_overflow=20)
+print(f"[OK] 使用 PostgreSQL 数据库: {DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -149,6 +134,7 @@ class TokenAccount(Base):
     total_purchased = Column(Integer, default=0)  # 累计购买
     total_consumed = Column(Integer, default=0)  # 累计消耗
     total_granted = Column(Integer, default=0)  # 累计赠送
+    trial_pro_count = Column(Integer, default=3)  # 专业版试用次数
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

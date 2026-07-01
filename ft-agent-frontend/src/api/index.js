@@ -203,6 +203,11 @@ const api = {
     })
   },
 
+  // 专业版试用
+  getTrialCount: () => {
+    return request.get('/user/trial-count')
+  },
+
   // 文件上传
   uploadFile: (file, agentType, onProgress) => {
     const formData = new FormData()

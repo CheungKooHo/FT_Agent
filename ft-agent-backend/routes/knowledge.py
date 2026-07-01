@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import shutil
+import base64
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
@@ -18,6 +19,9 @@ router = APIRouter(prefix="", tags=["知识库"])
 
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# 支持的图片格式
+ALLOWED_IMAGE_TYPES = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
 
 
 @router.post("/upload_file")
@@ -92,6 +96,55 @@ async def upload_file(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件处理失败: {str(e)}")
+
+
+@router.post("/upload_image")
+async def upload_image(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user)
+):
+    """上传图片并提取文字（OCR）"""
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail=f"不支持的图片格式，支持: {', '.join(ALLOWED_IMAGE_TYPES)}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_filename = f"{timestamp}_{file.filename}"
+    file_path = UPLOAD_DIR / safe_filename
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件保存失败: {str(e)}")
+    finally:
+        file.file.close()
+
+    extracted_text = ""
+
+    # 尝试 OCR 提取文字
+    try:
+        import pytesseract
+        from PIL import Image
+
+        img = Image.open(file_path)
+        # 如果是 RGBA 模式，转换为 RGB
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+        extracted_text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+        extracted_text = extracted_text.strip()
+    except ImportError:
+        # pytesseract 未安装，返回提示
+        extracted_text = f"[图片已上传，请在对话中描述图片内容，或升级专业版获取OCR识别功能]"
+    except Exception as e:
+        extracted_text = f"[图片已上传，文字识别失败: {str(e)}]"
+
+    return {
+        "status": "success",
+        "message": "图片上传成功",
+        "filename": safe_filename,
+        "extracted_text": extracted_text
+    }
 
 
 @router.get("/knowledge/files")
