@@ -91,7 +91,7 @@ async def register_user(request: UserRegisterRequest):
                 tier_id=basic_tier.id,
                 status="active",
                 start_date=datetime.utcnow(),
-                end_date=datetime.utcnow() + timedelta(days=365)
+                end_date=datetime.utcnow() + timedelta(days=15)
             )
             db.add(subscription)
             db.commit()

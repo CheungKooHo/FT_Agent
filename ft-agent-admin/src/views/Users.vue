@@ -174,6 +174,12 @@
         <el-button type="warning" @click="grantToken(currentUser); detailDialogVisible = false">
           赠送Token
         </el-button>
+        <el-button type="primary" @click="switchTier(currentUser); detailDialogVisible = false">
+          {{ currentUser?.tier === 'pro' ? '降级基础版' : '升级专业版' }}
+        </el-button>
+        <el-button type="warning" @click="openGrantTrialDialog(currentUser); detailDialogVisible = false">
+          赠送试用次数
+        </el-button>
         <el-button type="danger" @click="toggleStatus(currentUser); detailDialogVisible = false">
           {{ currentUser?.is_active ? '禁用用户' : '启用用户' }}
         </el-button>
@@ -196,6 +202,25 @@
       <template #footer>
         <el-button @click="grantDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmGrantToken">确认赠送</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 赠送专业版试用次数弹窗 -->
+    <el-dialog v-model="grantTrialDialogVisible" title="赠送专业版试用次数" width="400px">
+      <el-form label-width="100px">
+        <el-form-item label="用户">
+          <el-tag>{{ currentUser?.username }}</el-tag>
+        </el-form-item>
+        <el-form-item label="当前试用次数">
+          {{ currentUser?.trial_pro_count ?? '无记录' }} 次
+        </el-form-item>
+        <el-form-item label="赠送次数">
+          <el-input-number v-model="grantTrialCount" :min="1" :max="99" :step="1" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="grantTrialDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmGrantTrialCount">确认赠送</el-button>
       </template>
     </el-dialog>
   </div>
@@ -221,8 +246,10 @@ const searchKeyword = ref('')
 
 const detailDialogVisible = ref(false)
 const grantDialogVisible = ref(false)
+const grantTrialDialogVisible = ref(false)
 const currentUser = ref(null)
 const grantAmount = ref(100)
+const grantTrialCount = ref(1)
 
 const formatNumber = (num) => {
   if (!num) return '0'
@@ -372,6 +399,40 @@ const grantToken = (user) => {
   currentUser.value = user
   grantAmount.value = 100
   grantDialogVisible.value = true
+}
+
+const openGrantTrialDialog = (user) => {
+  currentUser.value = user
+  grantTrialCount.value = 1
+  grantTrialDialogVisible.value = true
+}
+
+const confirmGrantTrialCount = async () => {
+  try {
+    await api.grantTrialCount(currentUser.value.user_id, grantTrialCount.value)
+    ElMessage.success('赠送成功')
+    grantTrialDialogVisible.value = false
+    loadUsers()
+  } catch (error) {
+    ElMessage.error('赠送失败')
+  }
+}
+
+const switchTier = async (user) => {
+  const newTier = user.tier === 'pro' ? 'basic' : 'pro'
+  try {
+    await ElMessageBox.confirm(
+      `确定要将用户 ${user.username} 切换到${newTier === 'pro' ? '专业版' : '基础版'}吗？`,
+      '切换版本'
+    )
+    await api.updateUserTier(user.user_id, newTier)
+    ElMessage.success('切换成功')
+    loadUsers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('切换失败')
+    }
+  }
 }
 
 const confirmGrantToken = async () => {

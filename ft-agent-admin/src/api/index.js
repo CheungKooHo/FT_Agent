@@ -65,6 +65,14 @@ const api = {
     return request.post(`/admin/users/${userId}/grant-token`, null, { params: { amount } })
   },
 
+  updateUserTier: (userId, tierCode) => {
+    return request.put(`/admin/users/${userId}/tier`, null, { params: { tier_code: tierCode } })
+  },
+
+  grantTrialCount: (userId, count) => {
+    return request.post(`/admin/users/${userId}/grant-trial-count`, null, { params: { count } })
+  },
+
   // Token 统计
   getTokenStats: () => {
     return request.get('/admin/stats/token-usage')
@@ -111,7 +119,7 @@ const api = {
   },
 
   updateTier: (tierId, data) => {
-    return request.put(`/admin/tiers/${tierId}`, data)
+    return request.put(`/admin/tiers/${tierId}`, null, { params: data })
   },
 
   deleteTier: (tierId) => {

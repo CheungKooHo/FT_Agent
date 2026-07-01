@@ -25,7 +25,7 @@
     <div ref="messageListRef" class="message-list">
       <div v-if="messages.length === 0" class="empty-state">
         <el-icon :size="60" color="#dcdfe6"><ChatDotRound /></el-icon>
-        <p>开始与财税专家对话</p>
+        <p>开始与{{ billingStore.subscription?.tier === 'pro' ? '财税专家-专业版' : '财税专家-基础版' }}对话</p>
         <p class="hint">基础版可答政策，专业版更可分析方案</p>
         <!-- 推荐问题 -->
         <div class="recommended-questions">
@@ -53,15 +53,15 @@
         <el-avatar v-if="msg.role === 'user'" :size="36" class="avatar">
           {{ userStore.userInfo?.nickname?.charAt(0) || '我' }}
         </el-avatar>
-        <el-avatar v-else :size="36" class="avatar">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="#409EFF">
+        <el-avatar v-else :size="36" class="avatar" :style="{ background: (msg.agentType || billingStore.subscription?.tier) === 'pro' ? '#E6A23C' : '#409EFF' }">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="#fff">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
           </svg>
         </el-avatar>
 
         <div class="message-body">
           <div class="message-meta">
-            <span class="sender">{{ msg.role === 'user' ? (userStore.userInfo?.nickname || '我') : '财税专家' }}</span>
+            <span class="sender">{{ msg.role === 'user' ? (userStore.userInfo?.nickname || '我') : ((msg.agentType || billingStore.subscription?.tier) === 'pro' ? '财税专家-专业版' : '财税专家-基础版') }}</span>
             <span class="time">{{ msg.time }}</span>
           </div>
           <div class="message-text" :class="{ 'user-text': msg.role === 'user' }">
@@ -139,12 +139,14 @@
       </div>
 
       <div v-if="isLoading && !messages.some(m => m.streaming)" class="message-item assistant">
-        <el-avatar :size="36" class="avatar" :style="{ background: '#409EFF' }">
-          <el-icon><Robot /></el-icon>
+        <el-avatar :size="36" class="avatar" :style="{ background: billingStore.subscription?.tier === 'pro' ? '#E6A23C' : '#409EFF' }">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="#fff">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+          </svg>
         </el-avatar>
         <div class="message-body">
           <div class="message-meta">
-            <span class="sender">财税专家</span>
+            <span class="sender">{{ billingStore.subscription?.tier === 'pro' ? '财税专家-专业版' : '财税专家-基础版' }}</span>
           </div>
           <div class="message-text loading">
             <span class="typing-cursor"></span>
@@ -178,11 +180,15 @@
         </el-upload>
       </div>
       <div class="input-footer">
-        <!-- 基础版用户试用入口 -->
-        <div v-if="billingStore.subscription?.tier === 'basic'" class="trial-hint">
-          <el-button type="warning" size="small" plain @click="tryProAnswer">
-            试用专业版回答 (剩余{{ trialProCount }}次)
-          </el-button>
+        <!-- 基础版用户试用开关 -->
+        <div v-if="billingStore.subscription?.tier === 'basic'" class="trial-switch">
+          <el-switch
+            v-model="useTrialPro"
+            size="small"
+            :before-change="beforeTrialSwitch"
+            @change="onTrialSwitchChange"
+          />
+          <span class="trial-label">专业版尝鲜 (剩余{{ trialProCount }}次)</span>
         </div>
         <el-checkbox v-model="useMemory" size="small">启用记忆</el-checkbox>
         <el-button
@@ -216,33 +222,59 @@ const isLoading = ref(false)
 const useMemory = ref(true)
 const messageListRef = ref(null)
 
-// 收藏功能
-const favorites = ref([])
-
-const loadFavorites = () => {
-  const saved = localStorage.getItem('favorite_messages')
-  if (saved) favorites.value = JSON.parse(saved)
-}
+// 收藏功能（数据库存储）
+const favoriteIds = ref(new Set())
 
 const isFavorited = (msg) => {
-  return favorites.value.some(f => f.id === msg.id)
+  return favoriteIds.value.has(msg.id)
 }
 
-const toggleFavorite = (msg) => {
-  const idx = favorites.value.findIndex(f => f.id === msg.id)
-  if (idx >= 0) {
-    favorites.value.splice(idx, 1)
-    ElMessage.success('已取消收藏')
+const toggleFavorite = async (msg) => {
+  if (isFavorited(msg)) {
+    // 取消收藏 - 需要找到对应的收藏ID
+    try {
+      const res = await api.getFavorites(1, 100)
+      if (res.status === 'success') {
+        const fav = res.data.favorites.find(f => f.message_id === String(msg.id))
+        if (fav) {
+          await api.deleteFavorite(fav.id)
+          favoriteIds.value.delete(msg.id)
+          ElMessage.success('已取消收藏')
+        }
+      }
+    } catch (e) {
+      ElMessage.error('取消收藏失败')
+    }
   } else {
-    favorites.value.push({
-      id: msg.id,
-      content: msg.content,
-      time: msg.time,
-      sessionId: currentSessionId.value || 'default'
-    })
-    ElMessage.success('已收藏')
+    // 添加收藏
+    try {
+      await api.addFavorite({
+        content: msg.content,
+        session_id: currentSessionId.value || 'default',
+        source: '财税专家对话',
+        message_id: String(msg.id)
+      })
+      favoriteIds.value.add(msg.id)
+      ElMessage.success('已收藏')
+    } catch (e) {
+      ElMessage.error('收藏失败')
+    }
   }
-  localStorage.setItem('favorite_messages', JSON.stringify(favorites.value))
+}
+
+const loadFavoriteIds = async () => {
+  try {
+    const res = await api.getFavorites(1, 100)
+    if (res.status === 'success') {
+      res.data.favorites.forEach(f => {
+        if (f.message_id) {
+          favoriteIds.value.add(parseInt(f.message_id))
+        }
+      })
+    }
+  } catch (e) {
+    console.error('加载收藏失败', e)
+  }
 }
 
 const soundEnabled = ref(localStorage.getItem('soundEnabled') !== 'false')
@@ -253,13 +285,26 @@ const DRAFT_KEY = 'chat_draft'
 const trialProCount = ref(3)
 const useTrialPro = ref(false)
 
-const tryProAnswer = () => {
+// 专业版试用开关切换前校验
+const beforeTrialSwitch = () => {
+  if (billingStore.subscription?.tier === 'pro') {
+    ElMessage.info('您已经是专业版用户')
+    return false
+  }
   if (trialProCount.value <= 0) {
     ElMessage.warning('本月试用次数已用完，升级专业版解锁更多')
-    return
+    return false
   }
-  useTrialPro.value = true
-  ElMessage.info('已启用专业版尝鲜，本次回答将由专业版提供')
+  return true
+}
+
+// 专业版试用开关切换后
+const onTrialSwitchChange = (val) => {
+  if (val) {
+    ElMessage.info('已启用专业版尝鲜，本次回答将由专业版提供')
+  } else {
+    ElMessage.info('已取消专业版尝鲜')
+  }
 }
 
 // 图片上传
@@ -469,6 +514,15 @@ const handleSend = async () => {
   clearDraft()
   scrollBottom()
 
+  // 记录是否使用试用专业版
+  const isTrialPro = useTrialPro.value && billingStore.subscription?.tier === 'basic'
+  // 实际使用的版本
+  const actualAgentType = isTrialPro ? 'pro' : (billingStore.subscription?.tier || 'basic')
+  // 重置试用标记（只本次有效）
+  if (isTrialPro) {
+    useTrialPro.value = false
+  }
+
   // 创建 AI 消息占位（使用 reactive 确保响应式更新）
   const aiMsg = reactive({
     id: ++msgId,
@@ -476,18 +530,12 @@ const handleSend = async () => {
     content: '',
     time: formatTime(),
     references: [],
-    streaming: true  // 标记为流式进行中
+    streaming: true,  // 标记为流式进行中
+    agentType: actualAgentType  // 记录实际使用的版本
   })
   messages.value.push(aiMsg)
 
   isLoading.value = true
-
-  // 记录是否使用试用专业版
-  const isTrialPro = useTrialPro.value && billingStore.subscription?.tier === 'basic'
-  // 重置试用标记（只本次有效）
-  if (isTrialPro) {
-    useTrialPro.value = false
-  }
 
   try {
     await api.chatStream({
@@ -597,7 +645,8 @@ const loadHistory = async () => {
         role: m.role,
         content: m.content,
         references: m.references || [],
-        time: m.time || formatTime()
+        time: m.time || formatTime(),
+        agentType: m.agent_type === 'tax_pro' ? 'pro' : 'basic'
       }))
       scrollBottom()
     }
@@ -608,15 +657,15 @@ onMounted(async () => {
   await billingStore.init()
   loadHistory()
   loadDraft()
-  loadFavorites()
+  loadFavoriteIds()
   fetchTrialCount()
 })
 
 const fetchTrialCount = async () => {
   try {
     const res = await api.getTrialCount()
-    if (res.status === 'success') {
-      trialProCount.value = res.trial_pro_count
+    if (res.status === 'success' && res.data?.trial_pro_count) {
+      trialProCount.value = Number(res.data.trial_pro_count)
     }
   } catch (e) {
     console.error('获取试用次数失败', e)
@@ -848,6 +897,17 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   margin-top: 10px;
+}
+
+.trial-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.trial-label {
+  font-size: 12px;
+  color: #909399;
 }
 
 .input-actions {

@@ -104,7 +104,8 @@ class MemoryManager:
             item = {
                 "role": msg.role,
                 "content": msg.content,
-                "time": msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else ""
+                "time": msg.created_at.strftime("%Y-%m-%d %H:%M") if msg.created_at else "",
+                "agent_type": msg.agent_type
             }
             if msg.references:
                 try:

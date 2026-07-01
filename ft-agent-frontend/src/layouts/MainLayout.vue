@@ -51,6 +51,11 @@
             <span>历史记录</span>
           </el-menu-item>
 
+          <el-menu-item index="/favorites">
+            <el-icon><Star /></el-icon>
+            <span>我的收藏</span>
+          </el-menu-item>
+
           <el-menu-item index="/billing">
             <el-icon><Coin /></el-icon>
             <span>账户与订阅</span>

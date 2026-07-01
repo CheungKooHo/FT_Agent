@@ -45,6 +45,64 @@ async def admin_toggle_user_status(
         db.close()
 
 
+@router.put("/users/{user_id}/tier")
+async def admin_update_user_tier(
+    user_id: str,
+    tier_code: str,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """修改用户订阅版本"""
+    if tier_code not in ['basic', 'pro']:
+        raise HTTPException(status_code=400, detail="无效的版本代码")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        tier = db.query(UserTier).filter(UserTier.tier_code == tier_code).first()
+        if not tier:
+            raise HTTPException(status_code=404, detail="版本不存在")
+
+        # 更新或创建订阅
+        subscription = db.query(Subscription).filter(
+            Subscription.user_id == user_id,
+            Subscription.status == "active"
+        ).first()
+
+        if subscription:
+            subscription.tier_id = tier.id
+        else:
+            subscription = Subscription(
+                user_id=user_id,
+                tier_id=tier.id,
+                status="active",
+                start_date=datetime.utcnow(),
+                end_date=datetime.utcnow() + timedelta(days=365)
+            )
+            db.add(subscription)
+
+        db.commit()
+
+        create_audit_log(
+            db,
+            user_id=f"admin_{admin.id}",
+            username=admin.username,
+            action="update_user_tier",
+            target_type="user",
+            target_id=user_id,
+            details={"tier_code": tier_code}
+        )
+
+        return {
+            "status": "success",
+            "message": f"用户已切换到{tier.tier_name}"
+        }
+    finally:
+        db.close()
+
+
 @router.post("/users/{user_id}/grant-token")
 async def admin_grant_token(
     user_id: str,
@@ -89,6 +147,54 @@ async def admin_grant_token(
             "status": "success",
             "message": f"已赠送 {amount} Token",
             "data": {"balance": account.balance}
+        }
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/grant-trial-count")
+async def admin_grant_trial_count(
+    user_id: str,
+    count: int,
+    admin: AdminUser = Depends(get_current_admin_user)
+):
+    """管理员赠送专业版试用次数"""
+    if count <= 0:
+        raise HTTPException(status_code=400, detail="次数必须大于0")
+
+    db = SessionLocal()
+    try:
+        account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+        if not account:
+            account = TokenAccount(user_id=user_id, balance=0)
+            db.add(account)
+
+        account.trial_pro_count += count
+
+        transaction = TokenTransaction(
+            user_id=user_id,
+            transaction_type="grant",
+            amount=0,
+            balance_after=account.balance,
+            description=f"管理员 {admin.username} 赠送专业版试用次数 {count} 次"
+        )
+        db.add(transaction)
+        db.commit()
+
+        create_audit_log(
+            db,
+            user_id=f"admin_{admin.id}",
+            username=admin.username,
+            action="grant_trial_count",
+            target_type="user",
+            target_id=user_id,
+            details={"count": count, "trial_pro_count_after": account.trial_pro_count}
+        )
+
+        return {
+            "status": "success",
+            "message": f"已赠送 {count} 次专业版试用",
+            "data": {"trial_pro_count": account.trial_pro_count}
         }
     finally:
         db.close()
@@ -169,9 +275,13 @@ async def admin_list_users(
         ).filter(KnowledgeFile.user_id.in_(user_ids)).group_by(KnowledgeFile.user_id).all()}
 
         # 批量获取对话会话数
-        conv_counts = {r.user_id: r.count for r in db.query(
-            ConversationHistory.user_id, func.count(ConversationHistory.session_id.distinct())
-        ).filter(ConversationHistory.user_id.in_(user_ids)).group_by(ConversationHistory.user_id).all()}
+        conv_result = db.query(
+            ConversationHistory.user_id,
+            func.count(ConversationHistory.session_id.distinct()).label('conv_count')
+        ).filter(
+            ConversationHistory.user_id.in_(user_ids)
+        ).group_by(ConversationHistory.user_id).all()
+        conv_counts = {r.user_id: r.conv_count for r in conv_result}
 
         # 批量获取充值总额
         recharge_amounts = {r.user_id: r.total for r in db.query(
@@ -202,6 +312,7 @@ async def admin_list_users(
                 "token_balance": account.balance if account else 0,
                 "token_total_consumed": account.total_consumed if account else 0,
                 "token_total_purchased": account.total_purchased if account else 0,
+                "trial_pro_count": account.trial_pro_count if account else 0,
                 "tier": tier_obj.tier_code if tier_obj else (user_tier.tier_id if user_tier else "basic"),
                 "tier_name": tier_obj.tier_name if tier_obj else "基础版",
                 "subscription_end": sub.end_date.isoformat() if sub and sub.end_date else None,

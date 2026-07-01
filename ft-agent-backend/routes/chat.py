@@ -233,6 +233,18 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def get_default_trial_count(db):
+    """从系统配置获取默认试用次数"""
+    from core.database import SystemConfig
+    config = db.query(SystemConfig).filter(SystemConfig.key == 'trial_pro_count').first()
+    if config and config.value:
+        try:
+            return int(config.value)
+        except ValueError:
+            return 3
+    return 3
+
+
 @router.get("/user/trial-count")
 async def get_trial_count(user: User = Depends(get_current_user)):
     """获取用户专业版试用剩余次数"""
@@ -240,13 +252,24 @@ async def get_trial_count(user: User = Depends(get_current_user)):
         db = SessionLocal()
         try:
             account = db.query(TokenAccount).filter(TokenAccount.user_id == user.user_id).first()
+            default_count = get_default_trial_count(db)
             if not account:
-                # 创建新账户，默认3次试用
-                account = TokenAccount(user_id=user.user_id, balance=0, trial_pro_count=3)
+                account = TokenAccount(user_id=user.user_id, balance=0, trial_pro_count=default_count)
                 db.add(account)
                 db.commit()
-            return {"status": "success", "trial_pro_count": account.trial_pro_count}
+            return {"status": "success", "data": {"trial_pro_count": account.trial_pro_count, "default_count": default_count}}
         finally:
             db.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/system-config/trial-pro-count")
+async def get_trial_pro_count_config():
+    """获取专业版试用次数配置（公开接口，无需admin）"""
+    db = SessionLocal()
+    try:
+        default_count = get_default_trial_count(db)
+        return {"status": "success", "data": {"trial_pro_count": default_count}}
+    finally:
+        db.close()

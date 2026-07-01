@@ -13,7 +13,8 @@ ALLOWED_CONFIG_KEYS = {
     "maintenance_mode", "allow_register",
     "default_token_quota", "max_file_upload_size",
     "session_timeout_hours", "rate_limit_enabled",
-    "wechat_miniapp_enabled", "sms_enabled"
+    "wechat_miniapp_enabled", "sms_enabled",
+    "trial_pro_count"  # 专业版试用次数
 }
 
 # 禁止通过API修改的key（必须通过环境变量或部署配置）

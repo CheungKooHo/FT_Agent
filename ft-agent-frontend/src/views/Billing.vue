@@ -197,9 +197,9 @@
     </el-dialog>
 
     <!-- 套餐对比对话框 -->
-    <el-dialog v-model="showCompareDialog" title="套餐功能对比" width="500px">
-      <el-table :data="compareTableData" border>
-        <el-table-column prop="feature" label="功能" width="180" />
+    <el-dialog v-model="showCompareDialog" title="套餐功能对比" width="90%" max-width="500px">
+      <el-table :data="compareTableData" border size="small">
+        <el-table-column prop="feature" label="功能" />
         <el-table-column label="基础版" align="center">
           <template #default="{ row }">
             <span v-if="row.basic === true" class="text-success">✓</span>
@@ -242,15 +242,18 @@ const qrCodeUrl = ref('')
 const orderId = ref('')
 const showCompareDialog = ref(false)
 
+// 专业版试用次数（从后端配置读取）
+const trialProCountConfig = ref(3)
+
 // 套餐对比数据
-const compareTableData = [
+const compareTableData = computed(() => [
   { feature: '财税政策问答', basic: true, pro: true },
   { feature: '专业方案分析', basic: false, pro: true },
   { feature: '税费计算服务', basic: false, pro: true },
   { feature: '合规风险提示', basic: false, pro: true },
   { feature: '每月 Token 额度', basic: '100万', pro: '500万' },
-  { feature: '专业版试用机会', basic: '3次/月', pro: '不限' }
-]
+  { feature: '专业版试用机会', basic: `${trialProCountConfig.value}次/月`, pro: '不限' }
+])
 
 // 预设充值选项（金额：元）
 const rechargeOptions = [
@@ -415,6 +418,15 @@ const formatDate = (dateStr) => {
 onMounted(async () => {
   await billingStore.init()
   await billingStore.fetchTransactions()
+  // 获取专业版试用次数配置
+  try {
+    const res = await api.getTrialProCountConfig()
+    if (res.status === 'success' && res.data?.trial_pro_count) {
+      trialProCountConfig.value = Number(res.data.trial_pro_count)
+    }
+  } catch (e) {
+    console.error('获取试用次数配置失败', e)
+  }
 })
 </script>
 

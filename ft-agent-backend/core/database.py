@@ -303,6 +303,24 @@ class MessageFeedback(Base):
     )
 
 
+# 收藏表
+class MessageFavorite(Base):
+    __tablename__ = "message_favorites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    content = Column(Text)  # 收藏的消息内容
+    source = Column(String, nullable=True)  # 来源：对话来源描述
+    session_id = Column(String, nullable=True)  # 所属会话ID
+    message_id = Column(String, nullable=True)  # 原消息ID
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_fav_user', 'user_id'),
+        Index('idx_fav_session', 'session_id'),
+    )
+
+
 # 退款申请表
 class RefundRequest(Base):
     __tablename__ = "refund_requests"
@@ -360,5 +378,24 @@ def init_db():
                 print("[OK] conversation_history.references 列已添加")
             except Exception:
                 pass  # 列已存在
+
+    # 迁移：为 token_accounts 表添加 trial_pro_count 列（如果不存在）
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text('ALTER TABLE token_accounts ADD COLUMN trial_pro_count INTEGER DEFAULT 3'))
+            conn.commit()
+            print("[OK] token_accounts.trial_pro_count 列已添加")
+        except Exception:
+            pass  # 列已存在
+
+    # 初始化 system_configs 默认值
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("INSERT INTO system_configs (key, value, description) VALUES ('trial_pro_count', '3', '基础版用户每月专业版试用次数') ON CONFLICT (key) DO NOTHING"))
+            conn.commit()
+            print("[OK] system_configs.trial_pro_count 初始化完成")
+        except Exception:
+            pass  # 可能已存在或不支持ON CONFLICT
 
     print(f"[OK] 数据库表初始化完成")

@@ -34,6 +34,11 @@ const routes = [
         component: () => import('@/views/History.vue')
       },
       {
+        path: 'favorites',
+        name: 'Favorites',
+        component: () => import('@/views/Favorites.vue')
+      },
+      {
         path: 'billing',
         name: 'Billing',
         component: () => import('@/views/Billing.vue')

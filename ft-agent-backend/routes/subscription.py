@@ -39,6 +39,12 @@ async def get_subscription(user_id: str, user: User = Depends(get_current_user))
 
         tier = db.query(UserTier).filter(UserTier.id == subscription.tier_id).first()
 
+        # 计算剩余天数
+        remaining_days = (subscription.end_date - datetime.utcnow()).days if subscription.end_date else 0
+
+        # 获取试用次数
+        account = db.query(TokenAccount).filter(TokenAccount.user_id == user_id).first()
+
         return {
             "status": "success",
             "data": {
@@ -47,7 +53,9 @@ async def get_subscription(user_id: str, user: User = Depends(get_current_user))
                 "status": subscription.status,
                 "start_date": subscription.start_date.isoformat(),
                 "end_date": subscription.end_date.isoformat(),
-                "auto_renew": subscription.auto_renew
+                "remaining_days": max(0, remaining_days),
+                "auto_renew": subscription.auto_renew,
+                "trial_pro_count": account.trial_pro_count if account else 0
             }
         }
     finally:

@@ -208,6 +208,19 @@ const api = {
     return request.get('/user/trial-count')
   },
 
+  // 收藏
+  getFavorites: (page = 1, pageSize = 20) => {
+    return request.get('/favorites', { params: { page, page_size: pageSize } })
+  },
+
+  addFavorite: (data) => {
+    return request.post('/favorites', data)
+  },
+
+  deleteFavorite: (id) => {
+    return request.delete(`/favorites/${id}`)
+  },
+
   // 文件上传
   uploadFile: (file, agentType, onProgress) => {
     const formData = new FormData()
@@ -278,6 +291,16 @@ const api = {
 
   getTiers: () => {
     return request.get('/tiers')
+  },
+
+  // ===== 系统配置 =====
+  getSystemConfigs: () => {
+    return request.get('/admin/system-configs')
+  },
+
+  // 专业版试用次数配置（用户端）
+  getTrialProCountConfig: () => {
+    return request.get('/system-config/trial-pro-count')
   },
 
   // ===== 支付相关 =====
