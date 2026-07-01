@@ -1,0 +1,73 @@
+# 更新日志
+
+## v1.1.0 (2026-07-01)
+
+### 新增功能
+
+- **专业版试用尝鲜**：基础版用户每月可体验3次专业版回答
+- **截图/图片上传**：支持上传图片并自动提取文字（OCR），方便直接用截图提问
+- **回答收藏**：可收藏感兴趣的回答便于回顾
+- **推荐问题**：空对话状态显示5个常用财税问题示例
+- **套餐对比**：订阅页面新增套餐功能对比表，一目了然升级权益
+- **PWA快应用**：支持"添加到桌面"，像原生App一样使用
+
+### 功能优化
+
+- **财税专家头像**：更换为更专业的SVG图标
+- **重点标记高亮**：AI回答中的【重点内容】会以红色+下划线醒目显示
+- **点赞点踩反馈**：好评直接提交+轻量提示，差评改为内联选择原因，无需弹窗
+- **文案调整**：优化引导文案，从"基础版不提供..."改为"专业版可提供..."
+- **免责声明**：底部固定显示"内容由AI生成，仅供参考"，截图自动包含
+
+### 技术变更
+
+- **数据库**：TokenAccount 表新增 `trial_pro_count` 字段
+- **数据库**：移除 SQLite 支持，仅保留 PostgreSQL
+- **后端**：新增 `/user/trial-count` 接口（获取试用次数）
+- **后端**：新增 `/upload_image` 接口（图片上传+OCR）
+- **路由修复**：`/user/trial-count` 不再被 `/user/{user_id}` 错误匹配
+- **前端**：安装 `vite-plugin-pwa` 依赖
+
+### 文件变更
+
+**前端修改 (8个文件)**
+- `src/views/Chat.vue` - 核心对话页面多项改动
+- `src/views/Billing.vue` - 套餐对比功能
+- `src/components/MarkdownContent.vue` - 重点高亮样式
+- `src/App.vue` - 免责声明栏
+- `src/api/index.js` - 新增 API
+- `vite.config.js` - PWA 配置
+- `package.json` - 新增依赖
+- `index.html` - PWA meta 标签
+
+**后端修改 (4个文件)**
+- `routes/chat.py` - 试用逻辑 + 新接口
+- `routes/knowledge.py` - 图片上传 OCR
+- `core/database.py` - 字段变更 + 移除 SQLite
+- `main.py` - 路由顺序修复
+
+**新增文件 (1个)**
+- `public/robots.txt` - PWA SEO
+
+---
+
+## 部署说明
+
+### 数据库迁移
+
+在 PostgreSQL 数据库执行：
+
+```sql
+ALTER TABLE token_accounts ADD COLUMN trial_pro_count INTEGER DEFAULT 3;
+```
+
+### 前端依赖
+
+```bash
+cd ft-agent-frontend
+npm install
+```
+
+### 环境变量
+
+确保 `.env` 中 `DB_TYPE=postgresql`（已移除 SQLite 回退）
