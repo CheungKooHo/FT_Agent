@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from core.database import SessionLocal, User, Subscription, UserTier, TokenAccount, TokenTransaction
-from core.engine import run_agent, run_agent_stream, count_tokens
+from core.engine import run_agent, run_agent_stream, count_tokens, filter_basic_tier_response
 from routes.dependencies import get_current_user
 
 router = APIRouter(prefix="", tags=["对话"])
@@ -211,6 +211,8 @@ async def chat_stream_endpoint(request: ChatRequest, user: User = Depends(get_cu
                 memory_manager.add_message("user", user_input, agent_type)
                 memory_manager.add_message("assistant", full_response, agent_type, references=references)
                 memory_manager.close()
+
+            # 基础版：流结束后不再追加提示，依赖 System Prompt 限制
 
             finish_data = json.dumps({
                 "type": "finish",

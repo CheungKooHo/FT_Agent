@@ -69,6 +69,88 @@ def get_user_tier_config(user_id: str) -> dict:
         db.close()
 
 
+def filter_basic_tier_response(response: str) -> str:
+    """
+    过滤基础版回答中的建议性语言，确保只返回政策条文
+    如果过滤后内容变化太大，返回引导升级的提示
+    """
+    import re
+
+    # 建议性词汇和句式
+    suggestion_patterns = [
+        r'建议你[做应可以]',
+        r'你可以[选择考虑]',
+        r'最好[是去]',
+        r'建议[你]?',
+        r'可以[选择考虑]',
+        r'如果[你]?',
+        r'推荐[你]?',
+        r'提醒[你]?',
+        r'注意[到]?',
+        r'希望[你]?',
+        r'欢迎[你]?',
+        r'随时[告诉欢迎]',
+        r'帮你[计算分析]',
+        r'给你[的建议]',
+        r'最划算',
+        r'最优',
+        r'方案[是选]',
+        r'第一步|第二步|第三步|第四步',  # 流程类
+        r'具体操作',
+        r'操作流程',
+    ]
+
+    # 问题类词汇（基础版可以回答问题，但不能给建议）
+    question_suggestion = [
+        r'还有问题吗',
+        r'有其他问题',
+        r'随时问我',
+        r'需要我帮',
+        r'还有什么',
+    ]
+
+    # 检测是否有建议性内容
+    has_suggestion = False
+    for pattern in suggestion_patterns + question_suggestion:
+        if re.search(pattern, response):
+            has_suggestion = True
+            break
+
+    if has_suggestion:
+        # 提取政策条文（保留【】标记的重点）
+        lines = response.split('\n')
+        filtered_lines = []
+        for line in lines:
+            # 跳过明显的建议性句子
+            skip = False
+            for pattern in suggestion_patterns + question_suggestion:
+                if re.search(pattern, line):
+                    # 但保留纯政策条文（不包含建议动词的）
+                    if any(word in line for word in ['根据', '按照', '依据', '规定', '政策', '通知', '公告']):
+                        continue
+                    skip = True
+                    break
+            if not skip:
+                filtered_lines.append(line)
+
+        response = '\n'.join(filtered_lines)
+
+    # 如果过滤后内容太少或空，返回引导升级提示
+    if len(response.strip()) < 50:
+        response = """【基础版服务说明】
+基础版仅提供政策条文查询，不对政策进行解读、分析或建议。
+
+如需以下服务，请升级专业版：
+• 帮你分析利弊、算算税负
+• 对比不同方案的优劣势
+• 给出具体的操作建议和流程指导
+• 模拟计算能省多少钱
+
+"""
+
+    return response
+
+
 def check_token_balance(user_id: str, required_tokens: int) -> tuple:
     """
     检查 Token 余额是否充足
@@ -418,8 +500,13 @@ def run_agent(
             memory_manager.add_message("user", user_input, agent_type)
             memory_manager.add_message("assistant", assistant_message, agent_type, references=references)
 
+        # --- 8. 基础版过滤 ---
+        final_response = assistant_message
+        if tier_config.get("name") == "基础版":
+            final_response = filter_basic_tier_response(assistant_message)
+
         return {
-            "response": assistant_message,
+            "response": final_response,
             "token_used": actual_tokens,
             "tier": tier_config.get("name", "基础版"),
             "references": references
