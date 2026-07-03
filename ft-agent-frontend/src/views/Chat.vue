@@ -173,7 +173,18 @@
     </div>
 
     <div class="chat-input">
-      <!-- 图片上传 -->
+      <!-- 图片上传按钮 -->
+      <div class="upload-row">
+        <el-upload
+          :before-upload="handleImageUpload"
+          :show-file-list="false"
+          accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
+        >
+          <el-button type="primary" plain size="small" :icon="Upload">上传截图</el-button>
+        </el-upload>
+        <span class="upload-hint">支持 Ctrl+V 粘贴截图</span>
+      </div>
+      <!-- 已上传图片预览 -->
       <div v-if="uploadedImageText" class="uploaded-image-preview">
         <span class="image-text">{{ uploadedImageText }}</span>
         <el-button type="danger" size="small" text @click="uploadedImageText = ''">移除</el-button>
@@ -182,29 +193,23 @@
         v-model="inputMessage"
         type="textarea"
         :rows="3"
-        placeholder="输入财税问题，或上传截图提问..."
+        placeholder="输入财税问题..."
         resize="none"
         @keydown.ctrl.enter="handleSend"
+        @paste="handlePaste"
       />
-      <div class="input-actions">
-        <el-upload
-          :before-upload="handleImageUpload"
-          :show-file-list="false"
-          accept=".png,.jpg,.jpeg,.gif,.bmp,.webp"
-        >
-          <el-button text :icon="Upload" title="上传截图或图片" />
-        </el-upload>
-      </div>
       <div class="input-footer">
-        <!-- 基础版用户试用开关 -->
-        <div v-if="billingStore.subscription?.tier === 'basic'" class="trial-switch">
-          <el-switch
-            v-model="useTrialPro"
-            size="small"
-            :before-change="beforeTrialSwitch"
-            @change="onTrialSwitchChange"
-          />
-          <span class="trial-label">专业版尝鲜 (剩余{{ trialProCount }}次)</span>
+        <div class="footer-left">
+          <!-- 基础版用户试用开关 -->
+          <div v-if="billingStore.subscription?.tier === 'basic'" class="trial-switch">
+            <el-switch
+              v-model="useTrialPro"
+              size="small"
+              :before-change="beforeTrialSwitch"
+              @change="onTrialSwitchChange"
+            />
+            <span class="trial-label">专业版尝鲜 (剩余{{ trialProCount }}次)</span>
+          </div>
         </div>
         <el-checkbox v-model="useMemory" size="small">启用记忆</el-checkbox>
         <el-button
@@ -328,6 +333,23 @@ const onTrialSwitchChange = (val) => {
 
 // 图片上传
 const uploadedImageText = ref('')
+
+// 粘贴截图处理
+const handlePaste = async (event) => {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      event.preventDefault()
+      const file = item.getAsFile()
+      if (file) {
+        await handleImageUpload(file)
+      }
+      return
+    }
+  }
+}
 
 const handleImageUpload = async (file) => {
   const isImage = file.type.startsWith('image/')
@@ -934,6 +956,7 @@ onActivated(() => {
   border-top: 1px solid #ebeef5;
   background: #fff;
   flex-shrink: 0;
+  position: relative;
 }
 
 .input-footer {
@@ -941,6 +964,12 @@ onActivated(() => {
   justify-content: space-between;
   align-items: center;
   margin-top: 10px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .trial-switch {
@@ -954,10 +983,16 @@ onActivated(() => {
   color: #909399;
 }
 
-.input-actions {
-  position: absolute;
-  left: 28px;
-  bottom: 70px;
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: #909399;
 }
 
 .uploaded-image-preview {
