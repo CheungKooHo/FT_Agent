@@ -154,6 +154,22 @@
           </div>
         </div>
       </div>
+
+      <!-- 对话后的推荐问题 -->
+      <div v-if="showRecommended && recommendedQuestions.length > 0" class="recommended-questions after-chat">
+        <p class="rq-title">你可能还想问:</p>
+        <div class="rq-list">
+          <el-tag
+            v-for="q in recommendedQuestions"
+            :key="q"
+            type="info"
+            class="rq-tag"
+            @click="fillQuestion(q)"
+          >
+            {{ q }}
+          </el-tag>
+        </div>
+      </div>
     </div>
 
     <div class="chat-input">
@@ -221,6 +237,9 @@ const inputMessage = ref('')
 const isLoading = ref(false)
 const useMemory = ref(true)
 const messageListRef = ref(null)
+
+// 推荐问题显示控制
+const showRecommended = ref(false)
 
 // 收藏功能（数据库存储）
 const favoriteIds = ref(new Set())
@@ -345,17 +364,37 @@ const handleImageUpload = async (file) => {
   return false // 阻止默认上传
 }
 
-// 推荐问题
-const recommendedQuestions = [
+// 推荐问题（默认5个）
+const recommendedQuestions = ref([
   '企业所得税最新优惠政策有哪些?',
   '增值税专用发票和普通发票的区别',
   '个人所得税专项附加扣除标准',
   '公司报销哪些发票可以抵扣?',
   '小微企业税收优惠政策汇总'
-]
+])
 
 const fillQuestion = (q) => {
   inputMessage.value = q
+  showRecommended.value = false
+}
+
+// 生成推荐问题
+const generateRecommendedQuestions = async (userMessage, aiResponse) => {
+  console.log('generateRecommendedQuestions called', { userMessage, aiResponse })
+  try {
+    const tier = billingStore.subscription?.tier || 'basic'
+    console.log('Calling API with tier:', tier)
+    const res = await api.getRecommendedQuestions(userMessage, aiResponse, tier)
+    console.log('API response:', res)
+    if (res.status === 'success' && res.data.questions && res.data.questions.length > 0) {
+      recommendedQuestions.value = res.data.questions
+      showRecommended.value = true
+    } else {
+      console.log('未生成推荐问题:', res)
+    }
+  } catch (e) {
+    console.error('生成推荐问题失败:', e)
+  }
 }
 
 let msgId = 0
@@ -486,6 +525,9 @@ const scrollBottom = () => {
 const handleSend = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
 
+  // 发送新消息时隐藏推荐问题
+  showRecommended.value = false
+
   if (billingStore.tokenBalance <= 0) {
     ElMessageBox.confirm('Token余额不足，请先充值', '余额不足', {
       confirmButtonText: '去充值',
@@ -555,6 +597,8 @@ const handleSend = async () => {
         playSound()
         billingStore.fetchTokenBalance()
         scrollBottom()
+        // 生成推荐问题
+        generateRecommendedQuestions(userInput, aiMsg.content)
       },
       onError: (error) => {
         aiMsg.streaming = false
@@ -1071,5 +1115,24 @@ onActivated(() => {
 
 .rq-tag:hover {
   opacity: 0.8;
+}
+
+/* 对话后的推荐问题 */
+.recommended-questions.after-chat {
+  margin: 20px auto;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  max-width: 600px;
+}
+
+.recommended-questions.after-chat .rq-tag {
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+  height: auto;
+  min-height: 32px;
+  line-height: 1.4;
+  padding: 6px 12px;
 }
 </style>

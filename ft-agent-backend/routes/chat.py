@@ -273,3 +273,88 @@ async def get_trial_pro_count_config():
         return {"status": "success", "data": {"trial_pro_count": default_count}}
     finally:
         db.close()
+
+
+class RecommendedQuestionsRequest(BaseModel):
+    last_user_message: str
+    last_ai_response: str
+    tier: str = "basic"
+
+
+@router.post("/chat/recommended-questions")
+async def get_recommended_questions(request: RecommendedQuestionsRequest, user: User = Depends(get_current_user)):
+    """根据当前对话内容生成推荐的后续问题"""
+    try:
+        from core.engine import run_agent
+
+        # 根据版本选择不同的提示词
+        if request.tier == "pro":
+            system_prompt = """你是一个财税专家的助手。根据用户和AI的对话内容，生成5个用户可能会问的后续问题。
+要求：
+1. 问题应该与对话内容紧密相关，是用户可能会关心的财税问题
+2. 每次生成的问题应该有所不同，根据对话上下文定制
+3. 问题要简洁明了，控制在20字以内
+4. 只需要输出问题，不要其他解释
+5. 用中文输出
+
+格式：每行一个问题，共5行"""
+        else:
+            system_prompt = """你是一个财税政策助手。根据用户和AI的对话内容，生成5个用户可能会问的后续政策问题。
+要求：
+1. 问题应该与对话内容紧密相关，是用户可能会关心的政策问题
+2. 每次生成的问题应该有所不同，根据对话上下文定制
+3. 问题要简洁明了，控制在20字以内
+4. 只需要输出问题，不要其他解释
+5. 用中文输出
+
+格式：每行一个问题，共5行"""
+
+        response = run_agent(
+            user_input=f"基于以下对话，生成5个后续问题：\n\n用户：{request.last_user_message}\n\nAI：{request.last_ai_response}",
+            agent_type="tax_basic" if request.tier == "basic" else "tax_pro",
+            user_id=user.user_id,
+            use_memory=False,
+            conversation_history_limit=0
+        )
+
+        # 解析返回的问题
+        content = response.get("response", "")
+        lines = [line.strip() for line in content.split("\n") if line.strip()]
+        # 过滤出真正的问题（包含问号或以？结尾）
+        questions = []
+        for line in lines:
+            # 必须包含问号才是问题
+            if "？" not in line and "?" not in line:
+                continue
+            # 清理可能的前缀编号
+            clean_line = line.strip("。").strip()
+            if clean_line.startswith(("1", "2", "3", "4", "5", "一、", "二、", "三、", "四、", "五、")):
+                clean_line = clean_line.lstrip("12345一、二、三、四、五、.、 ")
+            # 去掉 markdown 格式符号
+            clean_line = clean_line.replace("**", "").strip()
+            if clean_line:
+                questions.append(clean_line)
+            if len(questions) >= 5:
+                break
+
+        # 如果解析失败，使用默认问题
+        if not questions:
+            questions = [
+                "企业所得税最新优惠政策有哪些?",
+                "增值税专用发票和普通发票的区别",
+                "个人所得税专项附加扣除标准",
+                "公司报销哪些发票可以抵扣?",
+                "小微企业税收优惠政策汇总"
+            ]
+
+        return {"status": "success", "data": {"questions": questions}}
+    except Exception as e:
+        # 出错时返回默认问题
+        default_questions = [
+            "企业所得税最新优惠政策有哪些?",
+            "增值税专用发票和普通发票的区别",
+            "个人所得税专项附加扣除标准",
+            "公司报销哪些发票可以抵扣?",
+            "小微企业税收优惠政策汇总"
+        ]
+        return {"status": "success", "data": {"questions": default_questions}}

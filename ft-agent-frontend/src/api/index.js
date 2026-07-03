@@ -70,6 +70,15 @@ const api = {
     return request.post('/chat', data)
   },
 
+  // 生成推荐问题
+  getRecommendedQuestions: (lastUserMessage, lastAiResponse, tier) => {
+    return request.post('/chat/recommended-questions', {
+      last_user_message: lastUserMessage,
+      last_ai_response: lastAiResponse,
+      tier: tier
+    })
+  },
+
   // 流式对话
   chatStream: (data, callbacks = {}) => {
     const { onChunk, onFinish, onError } = callbacks
