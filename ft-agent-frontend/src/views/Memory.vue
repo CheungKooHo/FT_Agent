@@ -27,15 +27,26 @@
           <el-tag :type="getMemoryTypeTag(memory.type)">
             {{ getMemoryTypeName(memory.type) }}
           </el-tag>
-          <el-button
-            type="danger"
-            size="small"
-            text
-            @click="handleDelete(memory)"
-          >
-            <el-icon><Delete /></el-icon>
-            删除
-          </el-button>
+          <div class="action-row">
+            <el-button
+              type="primary"
+              size="small"
+              text
+              @click="handleCommunicate(memory)"
+            >
+              <el-icon><ChatDotRound /></el-icon>
+              沟通一下
+            </el-button>
+            <el-button
+              type="danger"
+              size="small"
+              text
+              @click="handleDelete(memory)"
+            >
+              <el-icon><Delete /></el-icon>
+              删除
+            </el-button>
+          </div>
         </div>
 
         <div class="memory-content">
@@ -55,12 +66,7 @@
       width="90%"
       max-width="340px"
     >
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-width="100px"
-      >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="记忆类型" prop="memory_type">
           <el-select v-model="form.memory_type" placeholder="请选择记忆类型">
             <el-option label="个人信息" value="fact" />
@@ -99,64 +105,72 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { useUserStore } from '@/stores/user'
-import api from '@/api'
+import { ref, reactive, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useUserStore } from "@/stores/user";
+import api from "@/api";
 
-const userStore = useUserStore()
+const router = useRouter();
 
-const activeTab = ref('all')
-const memories = ref([])
-const dialogVisible = ref(false)
-const formRef = ref(null)
+const userStore = useUserStore();
+
+const activeTab = ref("all");
+const memories = ref([]);
+const dialogVisible = ref(false);
+const formRef = ref(null);
 
 const form = reactive({
-  memory_type: 'fact',
-  key: '',
-  value: '',
-  description: ''
-})
+  memory_type: "fact",
+  key: "",
+  value: "",
+  description: "",
+});
 
 const rules = {
-  memory_type: [{ required: true, message: '请选择记忆类型', trigger: 'change' }],
-  key: [{ required: true, message: '请输入记忆名称', trigger: 'blur' }],
-  value: [{ required: true, message: '请输入记忆内容', trigger: 'blur' }]
-}
+  memory_type: [
+    { required: true, message: "请选择记忆类型", trigger: "change" },
+  ],
+  key: [{ required: true, message: "请输入记忆名称", trigger: "blur" }],
+  value: [{ required: true, message: "请输入记忆内容", trigger: "blur" }],
+};
 
 // 获取记忆类型标签
 const getMemoryTypeTag = (type) => {
   const typeMap = {
-    fact: 'primary',
-    preference: 'success',
-    habit: 'warning'
-  }
-  return typeMap[type] || 'info'
-}
+    fact: "primary",
+    preference: "success",
+    habit: "warning",
+  };
+  return typeMap[type] || "info";
+};
 
 // 获取记忆类型名称
 const getMemoryTypeName = (type) => {
   const nameMap = {
-    fact: '个人信息',
-    preference: '偏好设置',
-    habit: '习惯记录'
-  }
-  return nameMap[type] || type
-}
+    fact: "个人信息",
+    preference: "偏好设置",
+    habit: "习惯记录",
+  };
+  return nameMap[type] || type;
+};
 
 // 加载记忆列表
 const loadMemories = async () => {
   try {
-    const memoryType = activeTab.value === 'all' ? null : activeTab.value
-    const response = await api.getUserMemories(userStore.userInfo.user_id, memoryType)
+    const memoryType = activeTab.value === "all" ? null : activeTab.value;
+    const response = await api.getUserMemories(
+      userStore.userInfo.user_id,
+      memoryType
+    );
 
-    if (response.status === 'success') {
-      memories.value = response.data
+    if (response.status === "success") {
+      memories.value = response.data;
     }
   } catch (error) {
-    ElMessage.error('加载记忆失败')
+    ElMessage.error("加载记忆失败");
   }
-}
+};
 
 // 提交新记忆
 const handleSubmit = async () => {
@@ -165,46 +179,56 @@ const handleSubmit = async () => {
       try {
         await api.saveMemory({
           user_id: userStore.userInfo.user_id,
-          ...form
-        })
+          ...form,
+        });
 
-        ElMessage.success('添加成功')
-        dialogVisible.value = false
+        ElMessage.success("添加成功");
+        dialogVisible.value = false;
 
         // 重置表单
-        Object.keys(form).forEach(key => {
-          form[key] = key === 'memory_type' ? 'fact' : ''
-        })
+        Object.keys(form).forEach((key) => {
+          form[key] = key === "memory_type" ? "fact" : "";
+        });
 
         // 重新加载列表
-        loadMemories()
+        loadMemories();
       } catch (error) {
-        ElMessage.error('添加失败')
+        ElMessage.error("添加失败");
       }
     }
-  })
-}
+  });
+};
+
+// 沟通一下 - 跳转到聊天页并携带记忆
+const handleCommunicate = (memory) => {
+  const query = {
+    memoryKey: memory.key,
+    memoryValue: memory.value,
+    memoryType: memory.type,
+  };
+  router.push({ path: "/chat", query });
+};
 
 // 删除记忆
 const handleDelete = async (memory) => {
-  await ElMessageBox.confirm(`确定要删除记忆"${memory.key}"吗？`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
+  await ElMessageBox.confirm(`确定要删除记忆"${memory.key}"吗？`, "提示", {
+    confirmButtonText: "确定",
+    cancelButtonText: "取消",
+    type: "warning",
+  });
 
   try {
-    await api.deleteMemory(userStore.userInfo.user_id, memory.key, memory.type)
-    ElMessage.success('删除成功')
-    loadMemories()
+    await api.deleteMemory(userStore.userInfo.user_id, memory.key, memory.type);
+    ElMessage.success("删除成功");
+    loadMemories();
   } catch (error) {
-    ElMessage.error('删除失败')
+    ElMessage.error("删除失败");
   }
-}
+};
 
 onMounted(() => {
-  loadMemories()
-})
+  loadMemories();
+});
 </script>
 
 <style scoped>

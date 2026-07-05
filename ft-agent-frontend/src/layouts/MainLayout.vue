@@ -110,12 +110,18 @@
           >
             <component :is="sidebarVisible ? 'Close' : 'Expand'" />
           </el-icon>
-          <h1 class="page-title" v-if="route.path !== '/'">
+          <h1
+            class="page-title"
+            v-if="route.path !== '/' && route.path !== '/chat'"
+          >
             {{ pageTitle }}
           </h1>
         </div>
         <!-- 免责声明 -->
-        <div class="disclaimer-bar" v-if="route.path === '/'">
+        <div
+          class="disclaimer-bar"
+          v-if="route.path === '/' || route.path === '/chat'"
+        >
           <span>
             内容由AI生成，仅供参考，不构成专业财税建议。
             <br v-if="isMobile" />

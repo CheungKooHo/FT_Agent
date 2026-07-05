@@ -365,12 +365,14 @@
 
 <script setup>
 import { ref, reactive, nextTick, onMounted, onActivated, watch } from "vue";
+import { useRoute } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useUserStore } from "@/stores/user";
 import { useBillingStore } from "@/stores/billing";
 import api from "@/api";
 import MarkdownContent from "@/components/MarkdownContent.vue";
 
+const route = useRoute();
 const userStore = useUserStore();
 const billingStore = useBillingStore();
 
@@ -907,6 +909,11 @@ onMounted(async () => {
   loadDraft();
   loadFavoriteIds();
   fetchTrialCount();
+
+  // 如果有记忆带来的参数，预填输入框
+  if (route.query.memoryKey && route.query.memoryValue) {
+    inputMessage.value = `关于【${route.query.memoryKey}】：${route.query.memoryValue}`;
+  }
 });
 
 const fetchTrialCount = async () => {
