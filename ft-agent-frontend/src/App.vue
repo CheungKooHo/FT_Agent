@@ -1,26 +1,25 @@
 <template>
   <div class="app-wrapper">
-    <router-view style="padding-bottom: 32px;" />
-    <!-- 免责声明 -->
-    <div class="disclaimer-bar">
-      <span>内容由AI生成，仅供参考，不构成专业财税建议。如需准确信息，请咨询持证财税专家。</span>
-    </div>
+    <router-view style="padding-bottom: 32px" />
   </div>
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue'
-import { useThemeStore } from '@/stores/theme'
+import { onMounted, watch } from "vue";
+import { useThemeStore } from "@/stores/theme";
 
-const themeStore = useThemeStore()
+const themeStore = useThemeStore();
 
 onMounted(() => {
-  themeStore.applyTheme()
-})
+  themeStore.applyTheme();
+});
 
-watch(() => themeStore.isDark, () => {
-  themeStore.applyTheme()
-})
+watch(
+  () => themeStore.isDark,
+  () => {
+    themeStore.applyTheme();
+  }
+);
 </script>
 
 <style>
@@ -30,7 +29,8 @@ watch(() => themeStore.isDark, () => {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -39,26 +39,14 @@ html, body {
 #app {
   width: 100%;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
 }
 
 .app-wrapper {
   width: 100%;
   height: 100%;
   position: relative;
-}
-
-.disclaimer-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.05);
-  text-align: center;
-  padding: 6px 16px;
-  font-size: 11px;
-  color: #909399;
-  z-index: 100;
 }
 
 .dark .disclaimer-bar {

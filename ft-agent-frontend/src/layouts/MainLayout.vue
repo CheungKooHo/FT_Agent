@@ -110,31 +110,36 @@
           >
             <component :is="sidebarVisible ? 'Close' : 'Expand'" />
           </el-icon>
-          <h1 class="page-title">{{ pageTitle }}</h1>
+          <h1 class="page-title" v-if="route.path !== '/'">
+            {{ pageTitle }}
+          </h1>
+        </div>
+        <!-- 免责声明 -->
+        <div class="disclaimer-bar" v-if="route.path === '/'">
+          <span>
+            内容由AI生成，仅供参考，不构成专业财税建议。
+            <br v-if="isMobile" />
+            如需准确信息，请咨询持证财税专家。
+          </span>
         </div>
         <div class="header-right">
-          <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99" class="notification-badge">
-            <el-icon class="notif-icon" @click="showNotificationPanel = true"><Bell /></el-icon>
+          <el-badge
+            :value="unreadCount"
+            :hidden="unreadCount === 0"
+            :max="99"
+            class="notification-badge"
+          >
+            <el-icon class="notif-icon" @click="showNotificationPanel = true"
+              ><Bell
+            /></el-icon>
           </el-badge>
-          <div class="token-badge">
+          <div class="token-badge" v-if="!isMobile">
             <el-icon><Coin /></el-icon>
             <span class="token-text"
-              >{{ billingStore.tokenBalance }} Token</span
+              >{{ (billingStore.tokenBalance / 10000).toFixed(2) }}W
+              Tokens</span
             >
           </div>
-          <el-dropdown @command="handleLanguageChange" trigger="click">
-            <el-icon class="lang-icon"><Translate /></el-icon>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="zh-CN" :disabled="locale === 'zh-CN'">
-                  <span>中文</span>
-                </el-dropdown-item>
-                <el-dropdown-item command="en-US" :disabled="locale === 'en-US'">
-                  <span>English</span>
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
         </div>
       </el-header>
 
@@ -143,10 +148,20 @@
       </el-main>
 
       <!-- 通知面板 -->
-      <el-drawer v-model="showNotificationPanel" title="通知中心" direction="rtl" size="380px">
+      <el-drawer
+        v-model="showNotificationPanel"
+        title="通知中心"
+        direction="rtl"
+        size="340px"
+      >
         <div class="notification-panel">
           <div class="notif-header">
-            <el-button size="small" @click="markAllRead" :disabled="unreadCount === 0">全部已读</el-button>
+            <el-button
+              size="small"
+              @click="markAllRead"
+              :disabled="unreadCount === 0"
+              >全部已读</el-button
+            >
           </div>
           <div v-if="notifications.length === 0" class="notif-empty">
             <el-empty description="暂无通知" :image-size="80" />
@@ -160,8 +175,12 @@
               @click="handleNotifClick(item)"
             >
               <div class="notif-icon-wrap">
-                <el-icon v-if="item.notification_type === 'system'"><InfoFilled /></el-icon>
-                <el-icon v-else-if="item.notification_type === 'subscription'"><Tickets /></el-icon>
+                <el-icon v-if="item.notification_type === 'system'"
+                  ><InfoFilled
+                /></el-icon>
+                <el-icon v-else-if="item.notification_type === 'subscription'"
+                  ><Tickets
+                /></el-icon>
                 <el-icon v-else><Bell /></el-icon>
               </div>
               <div class="notif-content">
@@ -252,17 +271,11 @@ const handleCommand = async (command) => {
   }
 };
 
-const handleLanguageChange = (lang) => {
-  locale.value = lang;
-  localStorage.setItem('locale', lang);
-  ElMessage.success(lang === 'zh-CN' ? '语言已切换为中文' : 'Language changed to English');
-};
-
 const loadUnreadCount = async () => {
   if (!userStore.userInfo?.user_id) return;
   try {
     const res = await api.getUnreadCount(userStore.userInfo.user_id);
-    if (res.status === 'success') {
+    if (res.status === "success") {
       unreadCount.value = res.data.count;
     }
   } catch (e) {
@@ -274,7 +287,7 @@ const loadNotifications = async () => {
   if (!userStore.userInfo?.user_id) return;
   try {
     const res = await api.getNotifications(userStore.userInfo.user_id);
-    if (res.status === 'success') {
+    if (res.status === "success") {
       notifications.value = res.data;
     }
   } catch (e) {
@@ -298,7 +311,7 @@ const markAllRead = async () => {
   if (!userStore.userInfo?.user_id) return;
   try {
     await api.markAllAsRead(userStore.userInfo.user_id);
-    notifications.value.forEach(n => n.is_read = true);
+    notifications.value.forEach((n) => (n.is_read = true));
     unreadCount.value = 0;
   } catch (e) {
     // ignore
@@ -306,19 +319,21 @@ const markAllRead = async () => {
 };
 
 const formatTime = (isoString) => {
-  if (!isoString) return '';
+  if (!isoString) return "";
   const d = new Date(isoString);
   const now = new Date();
   const diff = now - d;
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-  return d.toLocaleDateString('zh-CN');
+  if (diff < 60000) return "刚刚";
+  if (diff < 3600000) return Math.floor(diff / 60000) + "分钟前";
+  if (diff < 86400000) return Math.floor(diff / 3600000) + "小时前";
+  return d.toLocaleDateString("zh-CN");
 };
 </script>
 
 <style scoped>
 .main-layout {
+  margin: 0 auto !important;
+  padding: 0 !important;
   height: 100vh;
   width: 100%;
   display: flex;
@@ -345,6 +360,14 @@ const formatTime = (isoString) => {
   flex-direction: column;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
+}
+
+:deep(.el-drawer__header) {
+  margin-bottom: 10px !important;
+}
+
+:deep(.el-drawer__body) {
+  padding: 0 !important;
 }
 
 @media (max-width: 767px) {
@@ -384,6 +407,9 @@ const formatTime = (isoString) => {
     height: 56px;
     padding: 0 16px;
     width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .page-title {
@@ -391,7 +417,7 @@ const formatTime = (isoString) => {
   }
 
   .main-content {
-    padding: 12px;
+    padding: 0;
     flex: 1;
     width: 100%;
     min-width: 0;
@@ -404,7 +430,7 @@ const formatTime = (isoString) => {
   }
 
   :deep(.el-main) {
-    padding: 12px;
+    padding: 12px !important;
     flex: 1;
     width: 100%;
     min-width: 0;
@@ -581,6 +607,13 @@ const formatTime = (isoString) => {
   gap: 12px;
 }
 
+.disclaimer-bar {
+  text-align: center;
+  font-size: 11px;
+  color: #909399;
+  z-index: 100;
+}
+
 .hamburger {
   font-size: 20px;
   cursor: pointer;
@@ -740,7 +773,7 @@ const formatTime = (isoString) => {
 }
 
 .notif-header {
-  padding: 0 0 12px 0;
+  padding: 8px 12px 12px 0;
   border-bottom: 1px solid #ebeef5;
   display: flex;
   justify-content: flex-end;
