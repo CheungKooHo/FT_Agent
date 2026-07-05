@@ -1012,7 +1012,7 @@ onActivated(() => {
 }
 
 .message-body {
-  max-width: 70%;
+  /* max-width: 70%; */
   min-width: 60px;
 }
 
