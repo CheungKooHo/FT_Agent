@@ -42,17 +42,24 @@ class WechatService:
             return None
 
         if cls._wcp is None:
-            if not all([WECHAT_MCH_ID, WECHAT_API_KEY, WECHAT_CERT_PATH, WECHAT_KEY_PATH]):
+            if not all([WECHAT_MCH_ID, WECHAT_API_KEY, WECHAT_CERT_SERIAL_NO]):
                 return None
 
+            # 读取私钥文件内容
+            private_key = None
+            if WECHAT_KEY_PATH and os.path.exists(WECHAT_KEY_PATH):
+                with open(WECHAT_KEY_PATH, 'r') as f:
+                    private_key = f.read()
+
             cls._wcp = WeChatPay(
-                wechatpay_mchid=WECHAT_MCH_ID,
-                wechatpay_serial_no=WECHAT_CERT_SERIAL_NO,
-                wechatpay_private_key_path=WECHAT_KEY_PATH,
-                wechatpay_private_key=None,
-                wechatpay_cert_path=WECHAT_CERT_PATH,
-                wechatpay_apiv3_key=WECHAT_API_KEY,
-                wechatpay_callback_url=PAYMENT_CALLBACK_URL
+                wechatpay_type=None,
+                mchid=WECHAT_MCH_ID,
+                private_key=private_key,
+                cert_serial_no=WECHAT_CERT_SERIAL_NO,
+                appid=WECHAT_APP_ID or None,
+                apiv3_key=WECHAT_API_KEY,
+                notify_url=PAYMENT_CALLBACK_URL,
+                cert_dir=WECHAT_CERT_PATH if WECHAT_CERT_PATH and os.path.exists(WECHAT_CERT_PATH) else None
             )
         return cls._wcp
 
