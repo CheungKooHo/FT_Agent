@@ -21,6 +21,9 @@ from core.config import (
     WECHAT_APP_ID,
     WECHAT_MCH_ID,
     WECHAT_API_KEY,
+    WECHAT_CERT_PATH,
+    WECHAT_KEY_PATH,
+    WECHAT_CERT_SERIAL_NO,
     WECHAT_SANDBOX,
     PAYMENT_CALLBACK_URL,
     PaymentStatus
@@ -39,14 +42,16 @@ class WechatService:
             return None
 
         if cls._wcp is None:
-            if not all([WECHAT_APP_ID, WECHAT_MCH_ID, WECHAT_API_KEY]):
+            if not all([WECHAT_MCH_ID, WECHAT_API_KEY, WECHAT_CERT_PATH, WECHAT_KEY_PATH]):
                 return None
 
             cls._wcp = WeChatPay(
-                wechatpay_app_id=WECHAT_APP_ID,
                 wechatpay_mchid=WECHAT_MCH_ID,
-                wechatpay_serial_path=WECHAT_API_KEY,  # API 证书序列号或密钥
-                wechatpay_api_key=WECHAT_API_KEY,
+                wechatpay_serial_no=WECHAT_CERT_SERIAL_NO,
+                wechatpay_private_key_path=WECHAT_KEY_PATH,
+                wechatpay_private_key=None,
+                wechatpay_cert_path=WECHAT_CERT_PATH,
+                wechatpay_apiv3_key=WECHAT_API_KEY,
                 wechatpay_callback_url=PAYMENT_CALLBACK_URL
             )
         return cls._wcp

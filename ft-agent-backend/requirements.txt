@@ -47,3 +47,4 @@ apscheduler>=3.10.4
 
 # Payment
 alipay-sdk-python>=3.7.0
+wechatpayv3>=1.2.0

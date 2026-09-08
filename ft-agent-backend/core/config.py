@@ -17,6 +17,9 @@ ALIPAY_PUBLIC_KEY = os.getenv("ALIPAY_PUBLIC_KEY", "")
 WECHAT_APP_ID = os.getenv("WECHAT_APP_ID", "")
 WECHAT_MCH_ID = os.getenv("WECHAT_MCH_ID", "")
 WECHAT_API_KEY = os.getenv("WECHAT_API_KEY", "")
+WECHAT_CERT_PATH = os.getenv("WECHAT_CERT_PATH", "")
+WECHAT_KEY_PATH = os.getenv("WECHAT_KEY_PATH", "")
+WECHAT_CERT_SERIAL_NO = os.getenv("WECHAT_CERT_SERIAL_NO", "")
 
 # ===== 支付回调地址 =====
 PAYMENT_CALLBACK_URL = os.getenv("PAYMENT_CALLBACK_URL", "http://your-domain.com/payment/callback")
