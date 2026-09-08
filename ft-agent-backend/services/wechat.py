@@ -58,8 +58,7 @@ class WechatService:
                 cert_serial_no=WECHAT_CERT_SERIAL_NO,
                 appid=WECHAT_APP_ID or None,
                 apiv3_key=WECHAT_API_KEY,
-                notify_url=PAYMENT_CALLBACK_URL,
-                cert_dir=WECHAT_CERT_PATH if WECHAT_CERT_PATH and os.path.exists(WECHAT_CERT_PATH) else None
+                notify_url=PAYMENT_CALLBACK_URL
             )
         return cls._wcp
 
