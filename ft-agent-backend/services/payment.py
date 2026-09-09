@@ -128,19 +128,22 @@ class PaymentService:
                 if status == PaymentStatus.PAID:
                     order.paid_at = datetime.utcnow()
 
-                    # 执行充值/升级逻辑
+                    # 执行充值/升级逻辑（共用 db session）
                     if order.order_type == OrderType.RECHARGE:
-                        PaymentService._process_recharge(order)
+                        PaymentService._process_recharge(db, order)
                     elif order.order_type == OrderType.SUBSCRIPTION:
-                        PaymentService._process_subscription(order)
+                        PaymentService._process_subscription(db, order)
 
                 db.commit()
+                logging.error(f"订单{order_id}已提交, status={status}")
 
                 # 发送 Webhook 通知
                 PaymentService._send_payment_webhook(order, status)
 
                 return {"success": True, "order_id": order_id, "status": status}
             except Exception as e:
+                import logging
+                logging.error(f"处理订单异常: {e}")
                 db.rollback()
                 return {"success": False, "message": str(e)}
             finally:
@@ -149,11 +152,10 @@ class PaymentService:
             return {"success": False, "message": str(e)}
 
     @staticmethod
-    def _process_recharge(order: PaymentOrder) -> None:
-        """处理充值逻辑"""
+    def _process_recharge(db, order: PaymentOrder) -> None:
+        """处理充值逻辑（与调用方共用同一个 db session）"""
         from core.database import TokenAccount, TokenTransaction
 
-        db = SessionLocal()
         try:
             account = db.query(TokenAccount).filter(
                 TokenAccount.user_id == order.user_id
@@ -176,55 +178,50 @@ class PaymentService:
                 related_order_id=order.order_id
             )
             db.add(transaction)
-            db.commit()
 
             # 使 Token 余额缓存失效
             from services.cache import invalidate_token_balance
             invalidate_token_balance(order.user_id)
-        finally:
-            db.close()
+        except Exception as e:
+            import logging
+            logging.error(f"充值异常: {e}")
+            raise
 
     @staticmethod
-    def _process_subscription(order: PaymentOrder) -> None:
-        """处理订阅升级逻辑"""
+    def _process_subscription(db, order: PaymentOrder) -> None:
+        """处理订阅升级逻辑（与调用方共用同一个 db session）"""
         from core.database import Subscription, UserTier
         from datetime import timedelta
 
-        db = SessionLocal()
-        try:
-            tier = db.query(UserTier).filter(
-                UserTier.tier_code == "pro"
-            ).first()
+        tier = db.query(UserTier).filter(
+            UserTier.tier_code == "pro"
+        ).first()
 
-            if not tier:
-                return
+        if not tier:
+            return
 
-            # 检查现有订阅
-            existing = db.query(Subscription).filter(
-                Subscription.user_id == order.user_id,
-                Subscription.status == "active"
-            ).first()
+        # 检查现有订阅
+        existing = db.query(Subscription).filter(
+            Subscription.user_id == order.user_id,
+            Subscription.status == "active"
+        ).first()
 
-            if existing:
-                existing.tier_id = tier.id
-                existing.updated_at = datetime.utcnow()
-            else:
-                subscription = Subscription(
-                    user_id=order.user_id,
-                    tier_id=tier.id,
-                    status="active",
-                    start_date=datetime.utcnow(),
-                    end_date=datetime.utcnow() + timedelta(days=30)
-                )
-                db.add(subscription)
+        if existing:
+            existing.tier_id = tier.id
+            existing.updated_at = datetime.utcnow()
+        else:
+            subscription = Subscription(
+                user_id=order.user_id,
+                tier_id=tier.id,
+                status="active",
+                start_date=datetime.utcnow(),
+                end_date=datetime.utcnow() + timedelta(days=30)
+            )
+            db.add(subscription)
 
-            db.commit()
-
-            # 使缓存失效
-            from services.cache import invalidate_token_balance
-            invalidate_token_balance(order.user_id)
-        finally:
-            db.close()
+        # 使缓存失效
+        from services.cache import invalidate_token_balance
+        invalidate_token_balance(order.user_id)
 
     @staticmethod
     def query_order(order_id: str) -> Dict[str, Any]:
