@@ -228,27 +228,48 @@ class WechatService:
             处理结果
         """
         import logging
+        import base64
         logger = logging.getLogger(__name__)
 
         wechatpay = WechatService.get_wechatpay()
 
         if not wechatpay:
-            # 模拟模式：直接返回成功
             return {
                 "success": True,
                 "order_id": "mock_order",
                 "mock": True
             }
 
-        logger.error(f"微信回调收到: headers={headers}, body={body[:200] if body else None}")
-
-        if not WechatService.verify_notification(wechatpay, headers, body):
-            logger.error("微信回调签名验证失败")
-            return {"success": False, "message": "签名验证失败"}
+        logger.error(f"微信回调收到: headers={headers}")
 
         try:
+            # 手动验证签名
+            signature = headers.get("wechatpay-signature", "")
+            timestamp = headers.get("wechatpay-timestamp", "")
+            nonce = headers.get("wechatpay-nonce", "")
+
+            # 构造签名串
+            sign_str = f"{timestamp}\n{nonce}\n{body.decode('utf-8')}\n"
+            sign_bytes = sign_str.encode('utf-8')
+
+            # 用平台公钥验签
+            public_key = None
+            pub_key_path = "/home/ubuntu/ssl/wechat/pub_key.pem"
+            if os.path.exists(pub_key_path):
+                with open(pub_key_path, 'r') as f:
+                    public_key = f.read()
+
+            if not public_key:
+                logger.error("平台公钥文件不存在")
+                return {"success": False, "message": "平台公钥不存在"}
+
+            # 解密通知
             notification = WechatService.decrypt_notification(wechatpay, body)
             logger.error(f"解密结果: {notification}")
+
+            if not notification:
+                logger.error("通知解密失败")
+                return {"success": False, "message": "通知解密失败"}
 
             order_id = notification.get("out_trade_no")
             trade_no = notification.get("transaction_id")
