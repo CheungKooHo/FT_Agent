@@ -229,6 +229,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useBillingStore } from '@/stores/billing'
 import api from '@/api'
+import QRCode from 'qrcode'
 
 const billingStore = useBillingStore()
 
@@ -304,7 +305,14 @@ const confirmPayment = async () => {
     }
 
     // 2. 获取二维码
-    qrCodeUrl.value = order.qr_code || order.code_url
+    const codeUrl = order.qr_code || order.code_url
+    if (codeUrl) {
+      // 生成二维码图片
+      qrCodeUrl.value = await QRCode.toDataURL(codeUrl, {
+        width: 200,
+        margin: 2
+      })
+    }
     orderId.value = order.order_id
     paymentStep.value = 'qrcode'
 
