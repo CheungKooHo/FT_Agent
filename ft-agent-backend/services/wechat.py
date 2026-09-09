@@ -45,12 +45,20 @@ class WechatService:
             if not all([WECHAT_MCH_ID, WECHAT_API_KEY, WECHAT_CERT_SERIAL_NO]):
                 return None
 
-            # 读取私钥文件内容
+            # 读取商户私钥文件内容
             private_key = None
             if WECHAT_KEY_PATH and os.path.exists(WECHAT_KEY_PATH):
                 with open(WECHAT_KEY_PATH, 'r') as f:
                     private_key = f.read()
 
+            # 读取微信支付公钥文件内容
+            public_key = None
+            public_key_path = os.path.join(os.path.dirname(WECHAT_KEY_PATH), "pubkey.pem") if WECHAT_KEY_PATH else None
+            if public_key_path and os.path.exists(public_key_path):
+                with open(public_key_path, 'r') as f:
+                    public_key = f.read()
+
+            # 使用公钥模式初始化
             cls._wcp = WeChatPay(
                 wechatpay_type=None,
                 mchid=WECHAT_MCH_ID,
@@ -59,7 +67,8 @@ class WechatService:
                 appid=WECHAT_APP_ID or None,
                 apiv3_key=WECHAT_API_KEY,
                 notify_url=PAYMENT_CALLBACK_URL,
-                cert_dir=WECHAT_CERT_PATH if WECHAT_CERT_PATH else None
+                public_key=public_key,
+                public_key_id=WECHAT_CERT_SERIAL_NO
             )
         return cls._wcp
 
