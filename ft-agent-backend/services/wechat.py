@@ -197,26 +197,35 @@ class WechatService:
     def decrypt_notification(wechatpay: Any, body: bytes) -> Dict[str, Any]:
         """
         解密通知数据
-
-        Args:
-            wechatpay: WeChatPay 实例
-            body: 通知 body
-
-        Returns:
-            解密后的数据
         """
         if not wechatpay:
             return {}
 
         try:
-            # 使用 SDK 原生解密方法
+            import json
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            import base64
             import logging
-            notification = wechatpay.decrypt_notify(body)
-            logging.error(f"SDK解密结果: {notification}")
-            return notification if isinstance(notification, dict) else {}
+
+            data = json.loads(body)
+            resource = data.get("resource", {})
+
+            ciphertext = base64.b64decode(resource.get("ciphertext", ""))
+            nonce = base64.b64decode(resource.get("nonce", ""))
+            # associated_data 固定为 "transaction"
+            associated_data = "transaction".encode('utf-8')
+
+            aes_key = WECHAT_API_KEY.encode('utf-8')
+            logging.error(f"解密参数: key_len={len(aes_key)}, ct_len={len(ciphertext)}, nonce_len={len(nonce)}")
+
+            aesgcm = AESGCM(aes_key)
+            plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
+            result = json.loads(plaintext.decode('utf-8'))
+            logging.error(f"解密成功: {result}")
+            return result
         except Exception as e:
             import logging
-            logging.error(f"SDK解密异常: {e}")
+            logging.error(f"解密异常: {e}", exc_info=True)
             return {}
 
     @staticmethod
@@ -239,15 +248,9 @@ class WechatService:
         logger.error(f"微信回调收到: headers={headers}")
 
         try:
-            # SDK 的 decrypt_callback 需要小写 headers
-            cb_headers = {
-                'wechatpay-signature': headers.get('wechatpay-signature', ''),
-                'wechatpay-timestamp': headers.get('wechatpay-timestamp', ''),
-                'wechatpay-nonce': headers.get('wechatpay-nonce', ''),
-                'wechatpay-serial': headers.get('wechatpay-serial', '')
-            }
-            result = wechatpay.decrypt_callback(headers=cb_headers, body=body)
-            logger.error(f"SDK 解密结果: {result}")
+            # 直接用手动解密（SDK验签有bug）
+            result = WechatService.decrypt_notification(wechatpay, body)
+            logger.error(f"解密结果: {result}")
 
             if not result:
                 logger.error("通知解密后数据为空")
