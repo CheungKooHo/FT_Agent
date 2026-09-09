@@ -223,16 +223,8 @@ class WechatService:
     def handle_notify(headers: Dict, body: bytes) -> Dict[str, Any]:
         """
         处理异步通知
-
-        Args:
-            headers: 通知 headers
-            body: 通知 body
-
-        Returns:
-            处理结果
         """
         import logging
-        import base64
         logger = logging.getLogger(__name__)
 
         wechatpay = WechatService.get_wechatpay()
@@ -247,37 +239,23 @@ class WechatService:
         logger.error(f"微信回调收到: headers={headers}")
 
         try:
-            # 手动验证签名
-            signature = headers.get("wechatpay-signature", "")
-            timestamp = headers.get("wechatpay-timestamp", "")
-            nonce = headers.get("wechatpay-nonce", "")
+            # 1. 先用 SDK 内置方法验证签名
+            if not wechatpay.verify(headers, body):
+                logger.error("微信支付回调验签失败")
+                return {"success": False, "message": "验签失败"}
 
-            # 构造签名串
-            sign_str = f"{timestamp}\n{nonce}\n{body.decode('utf-8')}\n"
-            sign_bytes = sign_str.encode('utf-8')
+            # 2. 验签通过后，直接用 SDK 的 intercept_notification 解析出解密后的业务数据
+            result = wechatpay.intercept_notification(headers=headers, body=body)
+            logger.error(f"SDK 解密与解析结果: {result}")
 
-            # 用平台公钥验签
-            public_key = None
-            pub_key_path = "/home/ubuntu/ssl/wechat/pub_key.pem"
-            if os.path.exists(pub_key_path):
-                with open(pub_key_path, 'r') as f:
-                    public_key = f.read()
-
-            if not public_key:
-                logger.error("平台公钥文件不存在")
-                return {"success": False, "message": "平台公钥不存在"}
-
-            # 解密通知
-            notification = WechatService.decrypt_notification(wechatpay, body)
-            logger.error(f"解密结果: {notification}")
-
-            if not notification:
-                logger.error("通知解密失败")
+            if not result or "resource" not in result:
+                logger.error("通知解密后数据为空")
                 return {"success": False, "message": "通知解密失败"}
 
-            order_id = notification.get("out_trade_no")
-            trade_no = notification.get("transaction_id")
-            trade_state = notification.get("trade_state")
+            resource = result.get("resource", {})
+            order_id = resource.get("out_trade_no")
+            trade_no = resource.get("transaction_id")
+            trade_state = resource.get("trade_state")
 
             status_mapping = {
                 "SUCCESS": PaymentStatus.PAID,
@@ -292,7 +270,7 @@ class WechatService:
                 "status": status_mapping.get(trade_state, PaymentStatus.PENDING)
             }
         except Exception as e:
-            logger.error(f"处理回调异常: {e}")
+            logger.error(f"处理回调异常: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
 
     @staticmethod
