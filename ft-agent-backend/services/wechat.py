@@ -239,9 +239,14 @@ class WechatService:
         logger.error(f"微信回调收到: headers={headers}")
 
         try:
-            # 使用 SDK 的 decrypt_callback 解密回调
-            # decrypt_callback 会验证签名并解密
-            result = wechatpay.decrypt_callback(headers, body)
+            # SDK 的 decrypt_callback 需要小写 headers
+            cb_headers = {
+                'wechatpay-signature': headers.get('wechatpay-signature', ''),
+                'wechatpay-timestamp': headers.get('wechatpay-timestamp', ''),
+                'wechatpay-nonce': headers.get('wechatpay-nonce', ''),
+                'wechatpay-serial': headers.get('wechatpay-serial', '')
+            }
+            result = wechatpay.decrypt_callback(headers=cb_headers, body=body)
             logger.error(f"SDK 解密结果: {result}")
 
             if not result:
