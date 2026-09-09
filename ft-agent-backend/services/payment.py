@@ -103,12 +103,17 @@ class PaymentService:
             trade_no = result.get("trade_no")
             status = result.get("status")
 
+            import logging
+            logging.error(f"PaymentService回调: order_id={order_id}, trade_no={trade_no}, status={status}")
+
             # 更新订单状态
             db = SessionLocal()
             try:
                 order = db.query(PaymentOrder).filter(
                     PaymentOrder.order_id == order_id
                 ).first()
+
+                logging.error(f"订单查询结果: {order}")
 
                 if not order:
                     return {"success": False, "message": "订单不存在"}
