@@ -239,23 +239,18 @@ class WechatService:
         logger.error(f"微信回调收到: headers={headers}")
 
         try:
-            # 1. 先用 SDK 内置方法验证签名
-            if not wechatpay.verify(headers, body):
-                logger.error("微信支付回调验签失败")
-                return {"success": False, "message": "验签失败"}
+            # 使用 SDK 的 decrypt_callback 解密回调
+            # decrypt_callback 会验证签名并解密
+            result = wechatpay.decrypt_callback(headers, body)
+            logger.error(f"SDK 解密结果: {result}")
 
-            # 2. 验签通过后，直接用 SDK 的 intercept_notification 解析出解密后的业务数据
-            result = wechatpay.intercept_notification(headers=headers, body=body)
-            logger.error(f"SDK 解密与解析结果: {result}")
-
-            if not result or "resource" not in result:
+            if not result:
                 logger.error("通知解密后数据为空")
                 return {"success": False, "message": "通知解密失败"}
 
-            resource = result.get("resource", {})
-            order_id = resource.get("out_trade_no")
-            trade_no = resource.get("transaction_id")
-            trade_state = resource.get("trade_state")
+            order_id = result.get("out_trade_no")
+            trade_no = result.get("transaction_id")
+            trade_state = result.get("trade_state")
 
             status_mapping = {
                 "SUCCESS": PaymentStatus.PAID,
