@@ -94,7 +94,7 @@ class WechatService:
         # 实际调用微信支付
         total_amount = amount  # 微信支付使用分
 
-        code, response = wechatpay.pay(
+        code, message = wechatpay.pay(
             description=subject,
             out_trade_no=order_id,
             amount={'total': total_amount, 'currency': 'CNY'},
@@ -102,11 +102,25 @@ class WechatService:
             pay_type=WeChatPayType.NATIVE
         )
 
-        return {
-            "order_id": order_id,
-            "code": code,
-            "response": str(response)[:500]
-        }
+        import logging
+        logging.error(f"微信支付 RAW: code={code}, message={message}")
+
+        if code == 200:
+            code_url = None
+            if isinstance(message, dict):
+                code_url = message.get("code_url")
+            elif hasattr(message, 'json'):
+                code_url = message.json().get("code_url")
+            return {
+                "order_id": order_id,
+                "qr_code": None,
+                "code_url": code_url
+            }
+        else:
+            return {
+                "order_id": order_id,
+                "error": f"微信支付创建失败: code={code}, message={message}"
+            }
 
     @staticmethod
     def _create_mock_trade(order_id: str, amount: int, subject: str) -> Dict[str, Any]:
