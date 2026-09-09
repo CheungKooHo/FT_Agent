@@ -53,7 +53,7 @@ class WechatService:
 
             # 读取微信支付公钥文件内容
             public_key = None
-            public_key_path = os.path.join(os.path.dirname(WECHAT_KEY_PATH), "pubkey.pem") if WECHAT_KEY_PATH else None
+            public_key_path = os.path.join(os.path.dirname(WECHAT_KEY_PATH), "pub_key.pem") if WECHAT_KEY_PATH else None
             if public_key_path and os.path.exists(public_key_path):
                 with open(public_key_path, 'r') as f:
                     public_key = f.read()
