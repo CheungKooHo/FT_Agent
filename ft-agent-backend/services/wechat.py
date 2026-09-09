@@ -58,7 +58,8 @@ class WechatService:
                 cert_serial_no=WECHAT_CERT_SERIAL_NO,
                 appid=WECHAT_APP_ID or None,
                 apiv3_key=WECHAT_API_KEY,
-                notify_url=PAYMENT_CALLBACK_URL
+                notify_url=PAYMENT_CALLBACK_URL,
+                public_key_id=WECHAT_CERT_SERIAL_NO
             )
         return cls._wcp
 
