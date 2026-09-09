@@ -47,8 +47,24 @@ async def create_payment_order(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/callback")
+async def payment_callback(request: Request):
+    """微信支付回调（不带channel路径）"""
+    try:
+        body = await request.body()
+        headers = dict(request.headers)
+        result = PaymentService.handle_callback("wechat", body, headers)
+
+        if result.get("success"):
+            return {"status": "success", "message": "回调处理成功"}
+        else:
+            return {"status": "error", "message": result.get("message")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/callback/{channel}")
-async def payment_callback(channel: str, request: Request):
+async def payment_callback_channel(channel: str, request: Request):
     """支付回调"""
     try:
         if channel == "alipay":
