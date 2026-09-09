@@ -59,9 +59,9 @@ class WechatService:
                 with open(public_key_path, 'r') as f:
                     public_key = f.read()
 
-            # 使用公钥模式初始化
+            # 使用公钥模式初始化，wechatpay_type 必须指定
             cls._wcp = WeChatPay(
-                wechatpay_type=None,
+                wechatpay_type=WeChatPayType.NATIVE,
                 mchid=WECHAT_MCH_ID,
                 private_key=private_key,
                 cert_serial_no=WECHAT_CERT_SERIAL_NO,
@@ -69,8 +69,7 @@ class WechatService:
                 apiv3_key=WECHAT_API_KEY,
                 notify_url=PAYMENT_CALLBACK_URL,
                 public_key=public_key,
-                public_key_id=WECHAT_PUBLIC_KEY_ID,
-                cert_dir=WECHAT_CERT_PATH if WECHAT_CERT_PATH else None
+                public_key_id=WECHAT_PUBLIC_KEY_ID
             )
         return cls._wcp
 
@@ -100,12 +99,11 @@ class WechatService:
             description=subject,
             out_trade_no=order_id,
             amount={'total': total_amount, 'currency': 'CNY'},
-            notify_url=PAYMENT_CALLBACK_URL,
             pay_type=WeChatPayType.NATIVE
         )
 
         import logging
-        logging.error(f"微信支付 RAW: code={code}, message={message}, notify_url={PAYMENT_CALLBACK_URL}")
+        logging.error(f"微信支付 RAW: code={code}, message={message}")
 
         if code == 200:
             import json
@@ -222,12 +220,17 @@ class WechatService:
             # 获取加密数据
             ciphertext = base64.b64decode(resource.get("ciphertext", ""))
             nonce = base64.b64decode(resource.get("nonce", ""))
-            associated_data = resource.get("associated_data", "").encode()
+            # associated_data 在微信支付中固定为 "transaction"
+            associated_data = resource.get("associated_data", "transaction").encode('utf-8')
 
             # 使用 APIv3 密钥解密
-            aes_key = WECHAT_API_KEY.encode()
+            aes_key = WECHAT_API_KEY.encode('utf-8')
+            import logging
+            logging.error(f"APIv3密钥长度: {len(aes_key)}")
+            logging.error(f"ciphertext长度: {len(ciphertext)}, nonce长度: {len(nonce)}, aad: {associated_data}")
             aesgcm = AESGCM(aes_key)
             plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
+            logging.error(f"解密成功: {plaintext}")
             result = json.loads(plaintext.decode('utf-8'))
 
             return result
