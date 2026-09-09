@@ -196,36 +196,49 @@ class WechatService:
     @staticmethod
     def decrypt_notification(wechatpay: Any, body: bytes) -> Dict[str, Any]:
         """
-        解密通知数据
+        解密微信支付 V3 回调通知
         """
+        import base64
+        import json
+        import logging
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        logger = logging.getLogger(__name__)
+
         if not wechatpay:
             return {}
 
         try:
-            import json
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            import base64
-            import logging
-
             data = json.loads(body)
-            resource = data.get("resource", {})
+            resource = data.get("resource")
+            if not resource:
+                logger.error("微信支付回调缺少 resource")
+                return {}
 
-            ciphertext = base64.b64decode(resource.get("ciphertext", ""))
-            nonce = base64.b64decode(resource.get("nonce", ""))
-            # associated_data 固定为 "transaction"
-            associated_data = "transaction".encode('utf-8')
+            ciphertext_b64 = resource.get("ciphertext", "")
+            nonce_str = resource.get("nonce", "")
+            associated_data_str = resource.get("associated_data", "")
 
-            aes_key = WECHAT_API_KEY.encode('utf-8')
-            logging.error(f"解密参数: key_len={len(aes_key)}, ct_len={len(ciphertext)}, nonce_len={len(nonce)}")
+            if not ciphertext_b64 or not nonce_str:
+                logger.error("微信支付回调参数不完整")
+                return {}
+
+            aes_key = WECHAT_API_KEY.encode("utf-8")
+            ciphertext = base64.b64decode(ciphertext_b64)
+            nonce = nonce_str.encode("utf-8")
+            associated_data = associated_data_str.encode("utf-8")
+
+            logger.error(f"解密参数: key_len={len(aes_key)}, ct_len={len(ciphertext)}, nonce_len={len(nonce)}, aad_len={len(associated_data)}")
 
             aesgcm = AESGCM(aes_key)
             plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
-            result = json.loads(plaintext.decode('utf-8'))
-            logging.error(f"解密成功: {result}")
+            result = json.loads(plaintext.decode("utf-8"))
+            logger.error(f"解密成功: {result}")
             return result
+
         except Exception as e:
-            import logging
-            logging.error(f"解密异常: {e}", exc_info=True)
+            logger.error(f"解密异常: {e}", exc_info=True)
             return {}
 
     @staticmethod
