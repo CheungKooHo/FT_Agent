@@ -64,6 +64,7 @@ class WechatService:
                 mchid=WECHAT_MCH_ID,
                 private_key=private_key,
                 cert_serial_no=WECHAT_CERT_SERIAL_NO,
+                appid="",  # Native 支付可以为空
                 apiv3_key=WECHAT_API_KEY,
                 notify_url=PAYMENT_CALLBACK_URL,
                 public_key=public_key,
