@@ -24,6 +24,7 @@ from core.config import (
     WECHAT_CERT_PATH,
     WECHAT_KEY_PATH,
     WECHAT_CERT_SERIAL_NO,
+    WECHAT_PUBLIC_KEY_ID,
     WECHAT_SANDBOX,
     PAYMENT_CALLBACK_URL,
     PaymentStatus
@@ -68,7 +69,7 @@ class WechatService:
                 apiv3_key=WECHAT_API_KEY,
                 notify_url=PAYMENT_CALLBACK_URL,
                 public_key=public_key,
-                public_key_id=WECHAT_CERT_SERIAL_NO
+                public_key_id=WECHAT_PUBLIC_KEY_ID
             )
         return cls._wcp
 

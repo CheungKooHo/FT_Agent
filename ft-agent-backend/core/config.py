@@ -20,6 +20,7 @@ WECHAT_API_KEY = os.getenv("WECHAT_API_KEY", "")
 WECHAT_CERT_PATH = os.getenv("WECHAT_CERT_PATH", "")
 WECHAT_KEY_PATH = os.getenv("WECHAT_KEY_PATH", "")
 WECHAT_CERT_SERIAL_NO = os.getenv("WECHAT_CERT_SERIAL_NO", "")
+WECHAT_PUBLIC_KEY_ID = os.getenv("WECHAT_PUBLIC_KEY_ID", "")
 
 # ===== 支付回调地址 =====
 PAYMENT_CALLBACK_URL = os.getenv("PAYMENT_CALLBACK_URL", "http://your-domain.com/payment/callback")
