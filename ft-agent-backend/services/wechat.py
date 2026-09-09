@@ -102,19 +102,11 @@ class WechatService:
             pay_type=WeChatPayType.NATIVE
         )
 
-        if code == 200:
-            result = response if isinstance(response, dict) else {}
-            return {
-                "order_id": order_id,
-                "qr_code": None,
-                "code_url": result.get("code_url") if isinstance(result, dict) else None,
-                "debug_response": str(response)
-            }
-        else:
-            return {
-                "order_id": order_id,
-                "error": f"微信支付创建失败: {code}, {response}"
-            }
+        return {
+            "order_id": order_id,
+            "code": code,
+            "response": str(response)[:500]
+        }
 
     @staticmethod
     def _create_mock_trade(order_id: str, amount: int, subject: str) -> Dict[str, Any]:
