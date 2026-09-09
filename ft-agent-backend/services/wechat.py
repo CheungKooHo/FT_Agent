@@ -12,7 +12,7 @@ from pathlib import Path
 
 # 尝试导入 wechatpayv3，如果未安装则使用模拟实现
 try:
-    from wechatpayv3 import WeChatPay
+    from wechatpayv3 import WeChatPay, WeChatPayType
     HAS_WECHAT_SDK = True
 except ImportError:
     HAS_WECHAT_SDK = False
@@ -98,7 +98,8 @@ class WechatService:
             description=subject,
             out_trade_no=order_id,
             amount={'total': total_amount, 'currency': 'CNY'},
-            notify_url=PAYMENT_CALLBACK_URL
+            notify_url=PAYMENT_CALLBACK_URL,
+            pay_type=WeChatPayType.NATIVE
         )
 
         if code == 200:
