@@ -211,9 +211,29 @@ class WechatService:
             return {}
 
         try:
-            result = wechatpay.intercept_notification(headers={}, body=body)
+            # 手动解密微信支付回调
+            import json
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            import base64
+
+            data = json.loads(body)
+            resource = data.get("resource", {})
+
+            # 获取加密数据
+            ciphertext = base64.b64decode(resource.get("ciphertext", ""))
+            nonce = base64.b64decode(resource.get("nonce", ""))
+            associated_data = resource.get("associated_data", "").encode()
+
+            # 使用 APIv3 密钥解密
+            aes_key = WECHAT_API_KEY.encode()
+            aesgcm = AESGCM(aes_key)
+            plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
+            result = json.loads(plaintext.decode('utf-8'))
+
             return result
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.error(f"解密异常: {e}")
             return {}
 
     @staticmethod
