@@ -107,15 +107,12 @@ class WechatService:
         logging.error(f"微信支付 RAW: code={code}, message={message}")
 
         if code == 200:
-            code_url = None
-            if isinstance(message, dict):
-                code_url = message.get("code_url")
-            elif hasattr(message, 'json'):
-                code_url = message.json().get("code_url")
+            import json
+            result = json.loads(message) if isinstance(message, str) else message
             return {
                 "order_id": order_id,
                 "qr_code": None,
-                "code_url": code_url
+                "code_url": result.get("code_url")
             }
         else:
             return {
