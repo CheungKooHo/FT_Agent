@@ -104,7 +104,7 @@ class WechatService:
         )
 
         import logging
-        logging.error(f"微信支付 RAW: code={code}, message={message}")
+        logging.error(f"微信支付 RAW: code={code}, message={message}, notify_url={PAYMENT_CALLBACK_URL}")
 
         if code == 200:
             import json
