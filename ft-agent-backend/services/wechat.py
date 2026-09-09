@@ -227,6 +227,9 @@ class WechatService:
         Returns:
             处理结果
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         wechatpay = WechatService.get_wechatpay()
 
         if not wechatpay:
@@ -237,11 +240,15 @@ class WechatService:
                 "mock": True
             }
 
+        logger.error(f"微信回调收到: headers={headers}, body={body[:200] if body else None}")
+
         if not WechatService.verify_notification(wechatpay, headers, body):
+            logger.error("微信回调签名验证失败")
             return {"success": False, "message": "签名验证失败"}
 
         try:
             notification = WechatService.decrypt_notification(wechatpay, body)
+            logger.error(f"解密结果: {notification}")
 
             order_id = notification.get("out_trade_no")
             trade_no = notification.get("transaction_id")
@@ -260,6 +267,7 @@ class WechatService:
                 "status": status_mapping.get(trade_state, PaymentStatus.PENDING)
             }
         except Exception as e:
+            logger.error(f"处理回调异常: {e}")
             return {"success": False, "message": str(e)}
 
     @staticmethod
