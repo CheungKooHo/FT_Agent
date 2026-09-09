@@ -156,36 +156,34 @@ class PaymentService:
         """处理充值逻辑（与调用方共用同一个 db session）"""
         from core.database import TokenAccount, TokenTransaction
 
+        account = db.query(TokenAccount).filter(
+            TokenAccount.user_id == order.user_id
+        ).first()
+
+        if not account:
+            account = TokenAccount(user_id=order.user_id, balance=0)
+            db.add(account)
+            db.flush()
+
+        account.balance += order.token_amount
+        account.total_purchased += order.token_amount
+
+        transaction = TokenTransaction(
+            user_id=order.user_id,
+            transaction_type="purchase",
+            amount=order.token_amount,
+            balance_after=account.balance,
+            description=f"扫码支付充值 {order.token_amount} Token",
+            related_order_id=order.order_id
+        )
+        db.add(transaction)
+
+        # 使 Token 余额缓存失效（可选，依赖 redis）
         try:
-            account = db.query(TokenAccount).filter(
-                TokenAccount.user_id == order.user_id
-            ).first()
-
-            if not account:
-                account = TokenAccount(user_id=order.user_id, balance=0)
-                db.add(account)
-                db.flush()
-
-            account.balance += order.token_amount
-            account.total_purchased += order.token_amount
-
-            transaction = TokenTransaction(
-                user_id=order.user_id,
-                transaction_type="purchase",
-                amount=order.token_amount,
-                balance_after=account.balance,
-                description=f"扫码支付充值 {order.token_amount} Token",
-                related_order_id=order.order_id
-            )
-            db.add(transaction)
-
-            # 使 Token 余额缓存失效
             from services.cache import invalidate_token_balance
             invalidate_token_balance(order.user_id)
-        except Exception as e:
-            import logging
-            logging.error(f"充值异常: {e}")
-            raise
+        except Exception:
+            pass
 
     @staticmethod
     def _process_subscription(db, order: PaymentOrder) -> None:
