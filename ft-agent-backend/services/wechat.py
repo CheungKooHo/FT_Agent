@@ -209,34 +209,14 @@ class WechatService:
             return {}
 
         try:
-            # 手动解密微信支付回调
-            import json
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            import base64
-
-            data = json.loads(body)
-            resource = data.get("resource", {})
-
-            # 获取加密数据
-            ciphertext = base64.b64decode(resource.get("ciphertext", ""))
-            nonce = base64.b64decode(resource.get("nonce", ""))
-            # associated_data 在微信支付中固定为 "transaction"
-            associated_data = resource.get("associated_data", "transaction").encode('utf-8')
-
-            # 使用 APIv3 密钥解密
-            aes_key = WECHAT_API_KEY.encode('utf-8')
+            # 使用 SDK 原生解密方法
             import logging
-            logging.error(f"APIv3密钥长度: {len(aes_key)}")
-            logging.error(f"ciphertext长度: {len(ciphertext)}, nonce长度: {len(nonce)}, aad: {associated_data}")
-            aesgcm = AESGCM(aes_key)
-            plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data)
-            logging.error(f"解密成功: {plaintext}")
-            result = json.loads(plaintext.decode('utf-8'))
-
-            return result
+            notification = wechatpay.decrypt_notify(body)
+            logging.error(f"SDK解密结果: {notification}")
+            return notification if isinstance(notification, dict) else {}
         except Exception as e:
             import logging
-            logging.error(f"解密异常: {e}")
+            logging.error(f"SDK解密异常: {e}")
             return {}
 
     @staticmethod
