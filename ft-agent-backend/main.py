@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+import asyncio
+import os
+from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,7 +17,34 @@ from core.database import init_db
 
 init_db()
 
-app = FastAPI(title="FT-Agent 财税智能平台")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """启动/关闭钩子：在此启动定时任务调度器
+
+    放在 lifespan 里而不是 __main__ 块里，这样 `uvicorn main:app`（Docker 的启动方式）
+    和 `python main.py` 两条路径都能生效。
+
+    ENABLE_SCHEDULER 默认关闭：Docker 用 --workers 4 起多进程，每个进程都会执行
+    lifespan，不加开关会导致同一批政策被并发抓 4 次。单进程部署（裸机/systemd）
+    可设为 true 开启。
+    """
+    from tasks.scheduler import start_scheduler, stop_scheduler, _fetch_tax_policies_async
+
+    if os.getenv("ENABLE_SCHEDULER", "false").lower() == "true":
+        start_scheduler()
+        # 启动时立即执行一次抓取（后台运行，不阻塞 HTTP 服务器启动）
+        print("[INFO] 启动时首次抓取政策（后台）...")
+        asyncio.create_task(_fetch_tax_policies_async())
+    else:
+        print("[--] 定时任务调度器未启用（设置 ENABLE_SCHEDULER=true 开启）")
+
+    yield
+
+    stop_scheduler()
+
+
+app = FastAPI(title="FT-Agent 财税智能平台", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -103,10 +134,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    from tasks.scheduler import start_scheduler
-    import threading
-
-    scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
-    scheduler_thread.start()
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

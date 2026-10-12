@@ -24,6 +24,16 @@ env/
 *.db
 *.sqlite
 
+# Qdrant vector store
+ft-agent-backend/local_qdrant
+ft-agent-backend/local_qdrant/
+ft-agent-backend/storage/
+storage/
+.qdrant-initialized
+
+# Policy uploads (auto-crawled, can be regenerated via scheduler)
+ft-agent-backend/uploads/
+
 # Environment
 .env
 .env.local
@@ -44,3 +54,5 @@ Thumbs.db
 *.tmp
 *.temp
 versions/xx.py
+
+tax-policy-showcase_upload/

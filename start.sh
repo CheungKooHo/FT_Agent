@@ -8,7 +8,9 @@ echo "================================"
 echo ""
 
 # 检查是否在正确的目录
-if [ ! -d "ft-agent-backend" ] || [ ! -d "ft-agent-frontend" ] || [ ! -d "ft-agent-admin" ]; then
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+if [ ! -d "$PROJECT_DIR/ft-agent-backend" ] || [ ! -d "$PROJECT_DIR/ft-agent-frontend" ] || [ ! -d "$PROJECT_DIR/ft-agent-admin" ]; then
     echo "错误: 请在包含项目的目录下运行此脚本"
     echo "目录结构应该是:"
     echo "  ├── ft-agent-backend/"
@@ -19,7 +21,11 @@ fi
 
 # 启动后端
 echo "步骤 1: 启动后端服务..."
-cd ft-agent-backend
+cd "$PROJECT_DIR/ft-agent-backend"
+
+# 虚拟环境路径
+VENV_PYTHON="$PROJECT_DIR/ft-agent-backend/venv/bin/python"
+VENV_PIP="$PROJECT_DIR/ft-agent-backend/venv/bin/pip"
 
 # 检查虚拟环境
 if [ ! -d "venv" ]; then
@@ -27,35 +33,26 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 
-# 激活虚拟环境
-source venv/bin/activate
-
-# 加载环境变量
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+# 加载环境变量（绝对路径）
+if [ -f "$SCRIPT_DIR/ft-agent-backend/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/ft-agent-backend/.env"
+    set +a
 fi
 
 # 检查依赖
-if [ ! -f "venv/installed" ]; then
-    echo "安装后端依赖..."
-    pip install -r requirements.txt
-    touch venv/installed
-fi
-
-# 验证关键包是否能导入，失败则重装
-if ! python -c "import bcrypt" 2>/dev/null; then
+if ! $VENV_PYTHON -c "import bcrypt" 2>/dev/null; then
     echo "检测到依赖缺失，重新安装..."
-    pip install -r requirements.txt
-    touch venv/installed
+    $VENV_PIP install -r requirements.txt
 fi
 
 # 初始化数据库
 echo "初始化数据库..."
-python init_data.py
+$VENV_PYTHON init_data.py
 
 # 后台启动后端
 echo "启动 FastAPI 服务..."
-nohup python main.py > backend.log 2>&1 &
+nohup $VENV_PYTHON main.py > backend.log 2>&1 &
 BACKEND_PID=$!
 echo "后端服务已启动 (PID: $BACKEND_PID)"
 echo "访问地址: http://localhost:8000"
@@ -70,7 +67,7 @@ sleep 3
 # 启动前端
 echo ""
 echo "步骤 2: 启动用户前端..."
-cd ft-agent-frontend
+cd "$PROJECT_DIR/ft-agent-frontend"
 
 if [ ! -d "node_modules" ]; then
     echo "安装前端依赖..."
@@ -88,7 +85,7 @@ cd ..
 # 启动管理后台
 echo ""
 echo "步骤 3: 启动管理后台..."
-cd ft-agent-admin
+cd "$PROJECT_DIR/ft-agent-admin"
 
 if [ ! -d "node_modules" ]; then
     echo "安装前端依赖..."

@@ -1,4 +1,4 @@
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Qdrant
@@ -24,8 +24,8 @@ def get_embeddings():
     )
 
 def get_qdrant_client():
-    """获取Qdrant客户端"""
-    return QdrantClient(path="./local_qdrant")
+    """获取Qdrant客户端（使用 localhost HTTP，不依赖本地路径）"""
+    return QdrantClient(url="http://localhost:6333", check_compatibility=False)
 
 def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = None):
     """
@@ -35,8 +35,12 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     import re
     from langchain_core.documents import Document
 
-    # 1. 加载 PDF
-    loader = PyPDFLoader(file_path)
+    # 1. 加载文件：按扩展名选择 loader（政策抓取落盘为 .txt，手动上传为 .pdf）
+    suffix = os.path.splitext(file_path)[1].lower()
+    if suffix in (".txt", ".md"):
+        loader = TextLoader(file_path, encoding="utf-8")
+    else:
+        loader = PyPDFLoader(file_path)
     documents = loader.load()
 
     # 2. 智能切分 - 按政策条目切分，保持完整性
@@ -132,8 +136,13 @@ def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = Non
     )
 
     # 使该 collection 的 RAG 缓存失效
-    from services.cache import invalidate_rag_cache
-    invalidate_rag_cache(collection_name)
+    # 缓存是可选组件：redis 未安装或未部署时不能影响索引结果，否则向量已写入
+    # 却抛异常，调用方会误判为索引失败。
+    try:
+        from services.cache import invalidate_rag_cache
+        invalidate_rag_cache(collection_name)
+    except Exception as e:
+        print(f"[WARN] RAG 缓存失效跳过: {type(e).__name__}: {e}")
 
     return {"status": "success", "doc_id": doc_id, "chunks": len(texts)}
 

@@ -60,6 +60,10 @@ services:
       # Redis（可选）
       REDIS_URL: ${REDIS_URL:-}
 
+      # 定时任务调度器（单进程才能开：多 worker 会各起一个调度器导致重复抓取）
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-true}
+      POLICY_FRESH_DAYS: ${POLICY_FRESH_DAYS:-3650}
+
       # Webhook（可选）
       WEBHOOK_ENABLED: ${WEBHOOK_ENABLED:-false}
       WEBHOOK_URL: ${WEBHOOK_URL:-}

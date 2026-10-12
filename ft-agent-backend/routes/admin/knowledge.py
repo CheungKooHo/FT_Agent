@@ -212,6 +212,24 @@ async def admin_delete_knowledge_file(
         db.close()
 
 
+@router.post("/knowledge/fetch-policies")
+async def admin_fetch_policies(admin: AdminUser = Depends(get_current_admin_user)):
+    """手动触发一次财税政策抓取（同步执行，返回抓取统计）
+
+    自动抓取在每天 08:00 运行，失败时只会写日志、不易察觉。
+    这个接口用于随时手动验证抓取链路是否正常。
+    """
+    import asyncio
+    from tasks.scheduler import _fetch_tax_policies_async
+
+    try:
+        stats = await _fetch_tax_policies_async()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"抓取失败: {str(e)}")
+
+    return {"status": "success", "stats": stats}
+
+
 @router.get("/knowledge/stats")
 async def admin_knowledge_stats(admin: AdminUser = Depends(get_current_admin_user)):
     """获取知识库统计信息"""

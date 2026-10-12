@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Index, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -236,6 +239,7 @@ class KnowledgeFile(Base):
     file_type = Column(String, default="pdf")
     agent_type = Column(String, nullable=True)  # 上传时关联的 Agent 类型
     doc_id = Column(String, nullable=True)  # 向量库文档ID
+    source_url = Column(String, nullable=True)  # 政策原文链接（自动抓取用，去重依据）
     chunk_count = Column(Integer, default=0)  # 切片数量
     is_indexed = Column(Boolean, default=False)   # 是否已索引到 RAG
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -386,6 +390,15 @@ def init_db():
             conn.execute(text('ALTER TABLE token_accounts ADD COLUMN trial_pro_count INTEGER DEFAULT 3'))
             conn.commit()
             print("[OK] token_accounts.trial_pro_count 列已添加")
+        except Exception:
+            pass  # 列已存在
+
+    # 迁移：为 knowledge_files 表添加 source_url 列（如果不存在）
+    with engine.connect() as conn:
+        try:
+            conn.execute(text('ALTER TABLE knowledge_files ADD COLUMN source_url VARCHAR'))
+            conn.commit()
+            print("[OK] knowledge_files.source_url 列已添加")
         except Exception:
             pass  # 列已存在
 
