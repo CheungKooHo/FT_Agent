@@ -44,6 +44,9 @@ services:
       OPENAI_API_BASE: ${OPENAI_API_BASE:-https://api.deepseek.com}
       HF_ENDPOINT: https://hf-mirror.com
 
+      # 向量库配置
+      QDRANT_URL: http://host.docker.internal:6333
+
       # 数据库配置
       DB_TYPE: postgresql
       DB_USER: ft_agent

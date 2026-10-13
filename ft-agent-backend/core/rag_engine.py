@@ -24,13 +24,8 @@ def get_embeddings():
     )
 
 def get_qdrant_client():
-    """获取Qdrant客户端（自动检测：本地开发用localhost，Docker部署用host.docker.internal）"""
-    import socket
-    # Docker 容器内检测
-    if socket.gethostname() in ('agent-backend',):
-        url = "http://host.docker.internal:6333"
-    else:
-        url = "http://localhost:6333"
+    """获取Qdrant客户端（通过环境变量判断：本地开发用localhost，Docker部署用host.docker.internal）"""
+    url = os.getenv("QDRANT_URL", "http://localhost:6333")
     return QdrantClient(url=url, check_compatibility=False)
 
 def upload_and_index_pdf(file_path: str, collection_name: str, doc_id: str = None):
