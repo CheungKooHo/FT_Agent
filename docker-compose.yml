@@ -23,6 +23,15 @@ services:
     networks:
       - agent-network
 
+  # Qdrant 向量数据库
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: agent-qdrant
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    network_mode: host
+
   # 后端服务
   backend:
     build:
@@ -122,4 +131,6 @@ volumes:
   postgres_data:
     driver: local
   backend_uploads:
+    driver: local
+  qdrant_storage:
     driver: local
