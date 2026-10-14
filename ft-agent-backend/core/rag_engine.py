@@ -178,11 +178,20 @@ def search_knowledge(query: str, collection_name: str):
         query_vector = embeddings.embed_query(query)
 
         # 第一路召回：向量检索
-        search_results = client.query_points(
-            collection_name=collection_name,
-            query=query_vector,
-            limit=50
-        )
+        try:
+            search_results = client.query_points(
+                collection_name=collection_name,
+                query=query_vector,
+                limit=50
+            )
+        except Exception as e:
+            # 兼容旧版 API
+            search_results = client.search_points(
+                collection_name=collection_name,
+                search_params={},
+                query=query_vector,
+                limit=50
+            )
 
         # 构建候选集
         candidate_map = {}
