@@ -182,7 +182,8 @@ def search_knowledge(query: str, collection_name: str):
             search_results = client.query_points(
                 collection_name=collection_name,
                 query=query_vector,
-                limit=50
+                limit=50,
+                prefer_grpc=False
             )
         except Exception as e:
             # 兼容旧版 API
@@ -306,7 +307,8 @@ def search_knowledge_preview(query: str, collection_name: str, top_k: int = 5):
         search_results = client.query_points(
             collection_name=collection_name,
             query=query_vector,
-            limit=50
+            limit=50,
+            prefer_grpc=False
         )
 
         candidate_map = {}
