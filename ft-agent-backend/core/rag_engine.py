@@ -7,21 +7,26 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, VectorParams, PointStruct
 import uuid
 import os
+from functools import lru_cache
 
-# 定义本地 Embeddings 函数
+# 模型缓存，避免每次请求都重新加载（约 500MB）
+_cached_embeddings = None
+
 def get_embeddings():
     """
-    使用 HuggingFace 本地 Embeddings 模型
-    - 模型: paraphrase-multilingual-MiniLM-L12-v2 (约 20MB)
-    - 支持中文和英文
-    - 完全免费，本地运行
-    - 通过国内镜像源下载（需在 .env 中配置 HF_ENDPOINT）
+    使用 HuggingFace 本地 Embeddings 模型（已缓存，只加载一次）
+    - 模型: paraphrase-multilingual-MiniLM-L12-v2
     """
-    return HuggingFaceEmbeddings(
-        model_name="paraphrase-multilingual-MiniLM-L12-v2",
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}  # 归一化向量，提升检索效果
-    )
+    global _cached_embeddings
+    if _cached_embeddings is None:
+        print("[INFO] 正在加载 Embedding 模型（首次加载，后续请求直接使用缓存）...")
+        _cached_embeddings = HuggingFaceEmbeddings(
+            model_name="paraphrase-multilingual-MiniLM-L12-v2",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+        print("[INFO] Embedding 模型加载完成")
+    return _cached_embeddings
 
 def get_qdrant_client():
     """获取Qdrant客户端（通过环境变量判断：本地开发用localhost，Docker部署用host.docker.internal）"""

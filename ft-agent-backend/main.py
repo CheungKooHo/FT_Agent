@@ -31,6 +31,11 @@ async def lifespan(app: FastAPI):
     """
     from tasks.scheduler import start_scheduler, stop_scheduler, _fetch_tax_policies_async
 
+    # 预热 Embedding 模型，避免第一次请求时卡顿
+    print("[INFO] 预热 Embedding 模型...")
+    from core.rag_engine import get_embeddings
+    _ = get_embeddings()
+
     if os.getenv("ENABLE_SCHEDULER", "false").lower() == "true":
         start_scheduler()
         # 启动时立即执行一次抓取（后台运行，不阻塞 HTTP 服务器启动）
